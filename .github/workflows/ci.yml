@@ -104,13 +104,18 @@ jobs:
           const history = await fetch('http://127.0.0.1:3001/api/history?userId=ci-smoke').then((response) => response.json());
           if (history.plans?.length !== 1) throw new Error('accepted plan missing from history');
 
+          const runtimeConfigResponse = await fetch('http://127.0.0.1:3001/api/config');
+          if (!runtimeConfigResponse.ok) throw new Error('runtime config HTTP smoke failed');
+          const runtimeConfig = await runtimeConfigResponse.json();
+          if (runtimeConfig.region !== 'ap-south-1' || runtimeConfig.mapStyle !== 'Standard') throw new Error('runtime map config is invalid');
+
           const map = await fetch('http://127.0.0.1:3001/api/map/static', {
             method:'POST',
             headers:{'content-type':'application/json'},
             body:JSON.stringify({planId:plan.planId,tripId:'d3',change:plan.changes[0]})
           });
           if (!map.ok) throw new Error('map HTTP smoke failed');
-          console.log('local API demo → analyze → ICS → explain → accept → history → map smoke passed');
+          console.log('local API demo → analyze → ICS → explain → accept → history → config → map smoke passed');
           NODE
 
       - name: AWS SAM deployability
