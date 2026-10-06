@@ -1,9 +1,26 @@
-import { Check, LoaderCircle } from 'lucide-react';
+import { Cloud, Route, ShieldCheck } from 'lucide-react';
+import { FlowHeader } from '../components/FlowHeader';
 
 export function AnalysisScreen({ error, onBack }: { error?: string; onBack: () => void }) {
-  const steps = ['Agenda received', 'Journeys validated', 'Route alternatives requested', 'Pollution + weather timeline checked', 'Constraints applied'];
-  return <div className="screen narrow analysis-screen"><p className="eyebrow">AWS OPTIMIZATION</p><h1>Analyzing your day</h1>
-    {!error ? <div className="progress-card">{steps.map((step) => <div className="progress-row" key={step}><Check/> <span>{step}</span></div>)}<div className="progress-row active"><LoaderCircle className="spin"/><strong>Finding the best whole-day plan…</strong></div></div> : <div className="error-banner"><strong>Analysis stopped.</strong><br/>{error}<div><button className="secondary" onClick={onBack}>Return to travel setup</button></div></div>}
-    <p className="fine-print">No client-side optimizer is running. This screen waits for the AWS-backed analysis response.</p>
+  return <div className="screen narrow">
+    <FlowHeader step={3} onBack={error ? onBack : undefined}/>
+    <div className="analysis-screen">
+      {!error ? <>
+        <div className="analysis-mark" aria-hidden="true"><span/><span/><span/></div>
+        <div className="eyebrow">CHECKING YOUR DAY</div>
+        <h1>Finding the smallest useful changes</h1>
+        <div className="analysis-tags">
+          <span><Route size={16}/>Routes</span>
+          <span><Cloud size={16}/>Environment</span>
+          <span><ShieldCheck size={16}/>Constraints</span>
+        </div>
+        <div className="fine-print">AWS-backed analysis · no client-side scoring</div>
+      </> : <div className="analysis-error">
+        <div className="error-symbol">!</div>
+        <h1>Couldn’t finish the analysis</h1>
+        <div className="error-banner" role="alert">{error}</div>
+        <button className="secondary" onClick={onBack}>Review travel setup</button>
+      </div>}
+    </div>
   </div>;
 }
