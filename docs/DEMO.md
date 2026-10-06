@@ -4,13 +4,12 @@
 2. Review four fixed appointments and the supplied journeys.
 3. Keep the +10 minute whole-day tolerance.
 4. Analyze the day.
-5. Show AWS analysis details: routes checked, day plans considered and route environmental samples.
-6. Result should preserve every appointment, add exactly +7 minutes total travel, reduce modeled pollution exposure by roughly 30–40%, and reduce high-UV outdoor time by roughly 25–35%.
-7. Open What Changed. The DTU → Connaught Place change is small; the evening Connaught Place → Gym journey is the dominant avoidable-exposure reduction.
-8. Show the Amazon Location route comparison: current route, recommended route and pollution sample hotspots.
-9. Open Why. Bedrock may rewrite only the verified structured values.
-10. Use the optimized plan.
+5. Show the result dashboard: appointments unchanged, route-weighted environmental snapshot, and AWS optimization proof.
+6. The CI-locked story is one useful change: Connaught Place → Gym changes from Metro + walk to Bus, adds exactly +7 minutes, and cuts whole-day modeled pollution exposure by roughly 30–40%.
+7. Open What Changed and show the Amazon Location route comparison. The route samples—not a fake origin hotspot—drive the pollution overlay.
+8. Open Why. Bedrock may rewrite only persisted deterministic facts; it may not invent or alter numbers.
+9. Use the optimized plan. The accepted screen shows the same analyzed route geometry and lets the user copy the exact recommendation.
 
-The CI suite asserts these demo invariants so a product change cannot silently break the stage story.
+The CI suite asserts these demo invariants so a product or UI change cannot silently break the stage story.
 
-With DemoMode=true, route and environmental values are controlled and visibly labeled. In deployed mode, API Gateway, Lambda, Step Functions, Amazon Location, DynamoDB and CloudWatch remain the product path.
+With demo mode active, route and environmental values are controlled and visibly labeled **DEMO DATA**. In deployed mode, API Gateway, Lambda, Step Functions, Amazon Location, DynamoDB, CloudWatch, Open-Meteo and optional Bedrock remain the product path.

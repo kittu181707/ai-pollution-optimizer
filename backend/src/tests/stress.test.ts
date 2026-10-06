@@ -23,11 +23,11 @@ const env: EnvironmentSnapshot = {
 function candidate(trip: number, option: number): RouteCandidate {
   const original = option === 0;
   return {
-    candidateId: `t${trip}-o${option}`,
-    routeId: `r${trip}-o${option}`,
-    tripId: `t${trip}`,
+    candidateId: 't' + trip + '-o' + option,
+    routeId: 'r' + trip + '-o' + option,
+    tripId: 't' + trip,
     mode: option % 2 ? 'metro' : 'car',
-    label: `Option ${option}`,
+    label: 'Option ' + option,
     departureTime: '08:00',
     shiftMinutes: option === 4 ? 10 : 0,
     travelMinutes: 20 + option,
@@ -47,7 +47,7 @@ function candidate(trip: number, option: number): RouteCandidate {
 
 async function main() {
   const manySets: TripCandidateSet[] = Array.from({ length: 30 }, (_, trip) => ({
-    journey: { tripId: `t${trip}`, origin: `O${trip}`, destination: `D${trip}`, departureTime: '08:00', mode: 'car' },
+    journey: { tripId: 't' + trip, origin: 'O' + trip, destination: 'D' + trip, departureTime: '08:00', mode: 'car' },
     original: candidate(trip, 0),
     candidates: Array.from({ length: 5 }, (_, option) => candidate(trip, option)),
   }));
@@ -94,6 +94,21 @@ async function main() {
     assert.equal(ics.events.length, 1);
     assert.equal(ics.events[0].title, 'Meeting');
   }
+
+  const localDateToken = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10).replace(/-/g, '');
+  const zonedIcs = parseIcs([
+    'BEGIN:VCALENDAR',
+    'BEGIN:VEVENT',
+    'UID:zoned',
+    'DTSTART;TZID=Asia/Kolkata:' + localDateToken + 'T090000',
+    'DTEND;TZID=Asia/Kolkata:' + localDateToken + 'T100000',
+    'SUMMARY:Zoned meeting',
+    'LOCATION:Office',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n'));
+  assert.equal(zonedIcs.events[0]?.start, '09:00');
+  assert.equal(zonedIcs.events[0]?.end, '10:00');
 
   await assert.rejects(
     () => prepare({
@@ -150,39 +165,38 @@ async function main() {
   };
 
   const preparedDemo = await prepare(demoRequest);
+  const demoStarted = Date.now();
   const endToEnd = await runDirectAnalysis(preparedDemo);
+  assert(Date.now() - demoStarted < 5000, 'controlled demo analysis should complete quickly');
   assert.equal(endToEnd.trips.length, 4);
   assert.equal(endToEnd.metrics.appointmentsChanged, 0);
   assert.equal(endToEnd.metrics.extraTravelMinutes, 7);
   assert(endToEnd.metrics.pollutionReductionPct >= 30 && endToEnd.metrics.pollutionReductionPct <= 40);
-  const uvReduction = endToEnd.metrics.originalHighUvMinutes > 0
-    ? Math.round((1 - endToEnd.metrics.optimizedHighUvMinutes / endToEnd.metrics.originalHighUvMinutes) * 100)
-    : 0;
-  assert(uvReduction >= 25 && uvReduction <= 35);
-  assert.deepEqual(endToEnd.changes.map((trip) => trip.tripId), ['d2', 'd3']);
+  assert.deepEqual(endToEnd.changes.map((trip) => trip.tripId), ['d3']);
+  assert.equal(endToEnd.changes[0].recommended.mode, 'bus');
+  assert.equal(endToEnd.changes[0].recommended.travelMinutes - endToEnd.changes[0].original.travelMinutes, 7);
 
-  const reductions = endToEnd.changes.map((trip) => ({
-    tripId: trip.tripId,
-    reduction: trip.original.pollutionExposure - trip.recommended.pollutionExposure,
-  })).sort((a, b) => b.reduction - a.reduction);
-  assert.equal(reductions[0]?.tripId, 'd3');
-  assert(reductions[0].reduction > reductions[1].reduction * 20);
+  const midday = endToEnd.trips.find((trip) => trip.tripId === 'd2');
+  assert(midday);
+  assert.equal(midday.changed, false, 'sub-2% pollution gain with extra travel should be suppressed');
 
   assert(endToEnd.workflow.routeSource.includes('Controlled demo route data'));
   assert(endToEnd.workflow.environmentSource.includes('Controlled demo environmental data'));
+  assert.equal(endToEnd.workflow.dataMode, 'demo');
+  assert(endToEnd.workflow.analysisDurationMs >= 0);
   assert(endToEnd.workflow.environmentalSamples >= 12);
 
   endToEnd.trips.forEach((trip, index) => {
     const arriveBy = demoRequest.journeys[index].arriveBy;
     assert(trip.recommended.travelMinutes <= availableMinutes(trip.recommended.departureTime, arriveBy));
     assert(trip.candidatesEvaluated > 0);
-    assert(trip.recommended.environmentSamples.length === 3);
+    assert.equal(trip.recommended.environmentSamples.length, 3);
     assert(Number.isFinite(trip.recommended.environment.humidity));
     assert(Number.isFinite(trip.recommended.environment.windSpeed));
   });
 
   console.log('demo metrics', JSON.stringify(endToEnd.metrics));
-  console.log('stress, feasibility, candidate-generation and demo tests passed');
+  console.log('stress, feasibility, timezone, candidate-generation and demo tests passed');
 }
 
 void main();

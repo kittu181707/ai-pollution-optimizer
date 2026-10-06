@@ -1,6 +1,7 @@
 import type {
   AnalyzeDayRequest,
   BaseRoute,
+  JourneyInput,
   PreparedRequest,
   RouteCandidate,
   RouteEnvironmentSample,
@@ -26,122 +27,162 @@ type RouteJob = {
   includeAlternative: boolean;
 };
 
+type CandidateSetResult = {
+  set: TripCandidateSet;
+  environmentSources: string[];
+  routeSources: string[];
+};
+
 export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayRequest) {
+  const started = Date.now();
   const demoMode = input.demoMode ?? process.env.DEMO_MODE === 'true';
-  const sets: TripCandidateSet[] = [];
-  const environmentSources = new Set<string>();
-  const routeSources = new Set<string>();
 
-  for (let index = 0; index < input.journeys.length; index += 1) {
-    const journey = input.journeys[index];
-    const [origin, destination] = await Promise.all([
-      geocode(journey.origin, demoMode),
-      geocode(journey.destination, demoMode),
-    ]);
+  // Journeys are independent until the whole-day optimizer combines them.
+  // Build them concurrently so live dependency latency does not scale linearly with the day.
+  const results = await Promise.all(input.journeys.map((journey, index) =>
+    buildCandidateSet(input, journey, index, demoMode),
+  ));
 
-    const earliestDeparture = earliestDepartureForJourney(input.events, journey.origin, journey.destination, journey.arriveBy);
-    const jobs: RouteJob[] = [];
-
-    for (const shift of TIME_SHIFT_OPTIONS) {
-      const departureTime = shiftTime(journey.departureTime, shift);
-      if (earliestDeparture && timeToMinutes(departureTime) < timeToMinutes(earliestDeparture)) continue;
-      if (availableMinutes(departureTime, journey.arriveBy) <= 0) continue;
-      jobs.push({ mode: journey.mode, shift, departureTime, includeAlternative: shift === 0 });
-    }
-
-    for (const mode of ALT_MODE_ORDER.filter((mode) => mode !== journey.mode)) {
-      jobs.push({ mode, shift: 0, departureTime: journey.departureTime, includeAlternative: false });
-    }
-
-    const settled = await Promise.allSettled(jobs.map(async (job) => {
-      const routes = await routesForTrip({
-        origin,
-        destination,
-        mode: job.mode,
-        date: input.date,
-        departureTime: job.departureTime,
-        arriveBy: journey.arriveBy,
-        demoMode,
-        tripOrdinal: index,
-      });
-      return { job, routes };
-    }));
-
-    const routeCandidates: Array<{ route: BaseRoute; job: RouteJob }> = [];
-    let originalRoutingError: unknown;
-
-    settled.forEach((result, jobIndex) => {
-      const job = jobs[jobIndex];
-      if (result.status === 'rejected') {
-        if (job.mode === journey.mode && job.shift === 0) originalRoutingError = result.reason;
-        return;
-      }
-
-      const limit = result.value.job.includeAlternative ? 3 : 1;
-      for (const route of result.value.routes.slice(0, limit)) {
-        if (route.mode !== journey.mode && !isRealisticAlternative(route)) continue;
-        if (route.travelMinutes > availableMinutes(job.departureTime, journey.arriveBy)) continue;
-        routeSources.add(route.source);
-        routeCandidates.push({ route, job });
-      }
-    });
-
-    if (originalRoutingError) {
-      throw originalRoutingError instanceof Error
-        ? originalRoutingError
-        : new Error(`Could not route ${journey.origin} → ${journey.destination}`);
-    }
-
-    const originalRoute = routeCandidates.find(({ route, job }) =>
-      route.mode === journey.mode && job.shift === 0,
-    );
-    if (!originalRoute) throw new Error(`Original ${journey.mode} trip cannot arrive by its fixed appointment`);
-
-    const scored = await Promise.all(routeCandidates.map(async ({ route, job }) => {
-      const routeSamples = sampleRoute(route.geometry.length ? route.geometry : [origin, destination], route.travelMinutes);
-      const environmentSamples: RouteEnvironmentSample[] = await Promise.all(routeSamples.map(async (sample) => {
-        const sampleTime = shiftTime(job.departureTime, Math.round(sample.elapsedMinutes));
-        const environment = await environmentAt(sample.position, input.date, sampleTime, demoMode);
-        environmentSources.add(environment.source);
-        return { position: sample.position, minutes: sample.minutes, environment };
-      }));
-
-      return scoreRoute({
-        candidateId: `${journey.tripId}-${route.routeId}-${job.shift}`,
-        routeId: route.routeId,
-        tripId: journey.tripId,
-        mode: route.mode,
-        label: route.label + (job.shift ? ` · ${job.shift > 0 ? '+' : ''}${job.shift} min` : ''),
-        travelMinutes: route.travelMinutes,
-        distanceKm: route.distanceKm,
-        geometry: route.geometry,
-        source: route.source,
-        departureTime: job.departureTime,
-        shiftMinutes: job.shift,
-        environmentSamples,
-      });
-    }));
-
-    const candidates = dedupe(scored).slice(0, 12);
-    const original = candidates.find((candidate) =>
-      candidate.routeId === originalRoute.route.routeId
-      && candidate.mode === journey.mode
-      && candidate.shiftMinutes === 0,
-    );
-    if (!original) throw new Error('Original route was lost during candidate preparation');
-
-    sets.push({ journey, candidates, original });
-  }
-
-  return optimizeCandidateSets({
+  const analysis = optimizeCandidateSets({
     userId: input.userId,
     date: input.date,
     events: input.events,
-    sets,
+    sets: results.map((result) => result.set),
     maxExtraMinutes: input.maxExtraMinutes,
-    environmentSource: [...environmentSources].join(' + ') || 'unknown',
-    routeSource: [...routeSources].join(' + ') || 'unknown',
+    environmentSource: unique(results.flatMap((result) => result.environmentSources)).join(' + ') || 'unknown',
+    routeSource: unique(results.flatMap((result) => result.routeSources)).join(' + ') || 'unknown',
+    dataMode: demoMode ? 'demo' : 'live',
   });
+  analysis.workflow.analysisDurationMs = Date.now() - started;
+  return analysis;
+}
+
+async function buildCandidateSet(
+  input: PreparedRequest | AnalyzeDayRequest,
+  journey: JourneyInput,
+  index: number,
+  demoMode: boolean,
+): Promise<CandidateSetResult> {
+  const environmentSources = new Set<string>();
+  const routeSources = new Set<string>();
+  const [origin, destination] = await Promise.all([
+    geocode(journey.origin, demoMode),
+    geocode(journey.destination, demoMode),
+  ]);
+
+  const earliestDeparture = earliestDepartureForJourney(input.events, journey.origin, journey.destination, journey.arriveBy);
+  const jobs: RouteJob[] = [];
+
+  for (const shift of TIME_SHIFT_OPTIONS) {
+    const departureTime = shiftTime(journey.departureTime, shift);
+    if (earliestDeparture && timeToMinutes(departureTime) < timeToMinutes(earliestDeparture)) continue;
+    if (availableMinutes(departureTime, journey.arriveBy) <= 0) continue;
+    jobs.push({ mode: journey.mode, shift, departureTime, includeAlternative: shift === 0 });
+  }
+
+  for (const mode of ALT_MODE_ORDER.filter((mode) => mode !== journey.mode && (demoMode || mode !== 'bike'))) {
+    jobs.push({ mode, shift: 0, departureTime: journey.departureTime, includeAlternative: false });
+  }
+
+  const settled = await Promise.allSettled(jobs.map(async (job) => {
+    const routes = await routesForTrip({
+      origin,
+      destination,
+      mode: job.mode,
+      date: input.date,
+      departureTime: job.departureTime,
+      arriveBy: journey.arriveBy,
+      demoMode,
+      tripOrdinal: index,
+    });
+    return { job, routes };
+  }));
+
+  const routeCandidates: Array<{ route: BaseRoute; job: RouteJob }> = [];
+  let originalRoutingError: unknown;
+
+  settled.forEach((result, jobIndex) => {
+    const job = jobs[jobIndex];
+    if (result.status === 'rejected') {
+      if (job.mode === journey.mode && job.shift === 0) originalRoutingError = result.reason;
+      return;
+    }
+
+    const limit = result.value.job.includeAlternative ? 3 : 1;
+    for (const route of result.value.routes.slice(0, limit)) {
+      if (route.mode !== journey.mode && !isRealisticAlternative(route)) continue;
+      if (route.travelMinutes > availableMinutes(job.departureTime, journey.arriveBy)) continue;
+      routeSources.add(route.source);
+      routeCandidates.push({ route, job });
+    }
+  });
+
+  if (originalRoutingError) {
+    throw originalRoutingError instanceof Error
+      ? originalRoutingError
+      : new Error('Could not route ' + journey.origin + ' → ' + journey.destination);
+  }
+
+  const originalRoute = routeCandidates.find(({ route, job }) =>
+    route.mode === journey.mode && job.shift === 0,
+  );
+  if (!originalRoute) throw new Error('Original ' + journey.mode + ' trip cannot arrive by its fixed appointment');
+
+  const scored = await Promise.all(routeCandidates.map(async ({ route, job }) => {
+    const routeSamples = sampleRoute(route.geometry.length ? route.geometry : [origin, destination], route.travelMinutes);
+    const environmentSamples: RouteEnvironmentSample[] = await Promise.all(routeSamples.map(async (sample) => {
+      const sampleTime = shiftTime(job.departureTime, Math.round(sample.elapsedMinutes));
+      const environment = await environmentAt(sample.position, input.date, sampleTime, demoMode);
+      environmentSources.add(environment.source);
+      return { position: sample.position, minutes: sample.minutes, environment };
+    }));
+
+    return scoreRoute({
+      candidateId: journey.tripId + '-' + route.routeId + '-' + job.shift,
+      routeId: route.routeId,
+      tripId: journey.tripId,
+      mode: route.mode,
+      label: route.label + (job.shift ? ' · ' + (job.shift > 0 ? '+' : '') + job.shift + ' min' : ''),
+      travelMinutes: route.travelMinutes,
+      distanceKm: route.distanceKm,
+      geometry: route.geometry,
+      source: route.source,
+      departureTime: job.departureTime,
+      shiftMinutes: job.shift,
+      environmentSamples,
+    });
+  }));
+
+  const deduped = dedupe(scored);
+  const original = deduped.find((candidate) =>
+    candidate.routeId === originalRoute.route.routeId
+    && candidate.mode === journey.mode
+    && candidate.shiftMinutes === 0,
+  );
+  if (!original) throw new Error('Original route was lost during candidate preparation');
+
+  // A strict pollution-first objective can otherwise recommend a disruptive
+  // change for a negligible numerical gain. Only admit material improvements,
+  // unless the improvement costs no extra travel and no meaningful time shift.
+  const candidates = deduped
+    .filter((candidate) => candidate.candidateId === original.candidateId || isUsefulAlternative(candidate, original))
+    .slice(0, 12);
+
+  return {
+    set: { journey, candidates, original },
+    environmentSources: [...environmentSources],
+    routeSources: [...routeSources],
+  };
+}
+
+function isUsefulAlternative(candidate: RouteCandidate, original: RouteCandidate) {
+  if (original.pollutionExposure <= 0) return false;
+  const gain = (original.pollutionExposure - candidate.pollutionExposure) / original.pollutionExposure;
+  if (gain <= 0) return false;
+
+  const noExtraTravel = candidate.travelMinutes <= original.travelMinutes;
+  const smallShift = Math.abs(candidate.shiftMinutes) <= 5;
+  return gain >= .02 || (noExtraTravel && smallShift);
 }
 
 function sampleRoute(geometry: Coordinates[], travelMinutes: number) {
@@ -224,6 +265,10 @@ function dedupe(items: RouteCandidate[]) {
     seen.add(key);
     return true;
   });
+}
+
+function unique(items: string[]) {
+  return [...new Set(items.filter(Boolean))];
 }
 
 function distanceKm(a: Coordinates, b: Coordinates) {

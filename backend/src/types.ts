@@ -124,6 +124,8 @@ export interface DayAnalysis {
     environmentSource: string;
     routeSource: string;
     environmentalSamples: number;
+    dataMode: 'demo' | 'live';
+    analysisDurationMs: number;
   };
 }
 

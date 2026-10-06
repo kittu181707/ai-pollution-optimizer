@@ -64,30 +64,39 @@ export function deriveJourneys(events: CalendarEvent[], homeLocation: string): J
   const sorted = [...events].sort((a, b) => a.start.localeCompare(b.start));
   if (!sorted.length) return [];
 
-  const output: JourneyInput[] = [{
-    tripId: uid('trip'),
-    origin: homeLocation,
-    destination: sorted[0].location,
-    departureTime: minutesToTime(timeToMinutes(sorted[0].start) - 45),
-    arriveBy: sorted[0].start,
-    mode: 'car',
-  }];
+  const output: JourneyInput[] = [];
+  const samePlace = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
-  for (let index = 1; index < sorted.length; index += 1) {
+  if (!samePlace(homeLocation, sorted[0].location)) {
     output.push({
       tripId: uid('trip'),
-      origin: sorted[index - 1].location,
-      destination: sorted[index].location,
+      origin: homeLocation,
+      destination: sorted[0].location,
+      departureTime: minutesToTime(timeToMinutes(sorted[0].start) - 45),
+      arriveBy: sorted[0].start,
+      mode: 'car',
+    });
+  }
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    const origin = sorted[index - 1].location;
+    const destination = sorted[index].location;
+    if (samePlace(origin, destination)) continue;
+    output.push({
+      tripId: uid('trip'),
+      origin,
+      destination,
       departureTime: sorted[index - 1].end,
       arriveBy: sorted[index].start,
       mode: 'metro',
     });
   }
 
-  if (sorted.at(-1)!.location.trim().toLowerCase() !== homeLocation.trim().toLowerCase()) {
+  const lastLocation = sorted.at(-1)!.location;
+  if (!samePlace(lastLocation, homeLocation)) {
     output.push({
       tripId: uid('trip'),
-      origin: sorted.at(-1)!.location,
+      origin: lastLocation,
       destination: homeLocation,
       departureTime: sorted.at(-1)!.end,
       mode: 'car',

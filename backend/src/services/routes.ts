@@ -104,7 +104,7 @@ function demoRoutes(input: {
   if (input.tripOrdinal === 1 && input.mode === 'bus') minutes = 45;
 
   if (input.tripOrdinal === 2) {
-    const planned: Record<TransportMode, number> = { car: 23, bike: 12, bus: 25, metro: 20, walk: 26 };
+    const planned: Record<TransportMode, number> = { car: 23, bike: 12, bus: 27, metro: 20, walk: 26 };
     minutes = planned[input.mode];
   }
 

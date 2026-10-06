@@ -4,13 +4,14 @@ import { FlowHeader } from '../components/FlowHeader';
 import { ModeIcon } from '../components/ModeIcon';
 import { modes, shortTime } from '../utils';
 
-export function TravelScreen({ journeys, setJourneys, maxExtra, setMaxExtra, onBack, onAnalyze }: {
+export function TravelScreen({ journeys, setJourneys, maxExtra, setMaxExtra, onBack, onAnalyze, isDemo }: {
   journeys: JourneyInput[];
   setJourneys: (value: JourneyInput[]) => void;
   maxExtra: number;
   setMaxExtra: (value: number) => void;
   onBack: () => void;
   onAnalyze: () => void;
+  isDemo: boolean;
 }) {
   const update = (id: string, patch: Partial<JourneyInput>) =>
     setJourneys(journeys.map((journey) => journey.tripId === id ? { ...journey, ...patch } : journey));
@@ -23,6 +24,10 @@ export function TravelScreen({ journeys, setJourneys, maxExtra, setMaxExtra, onB
       <h1>Confirm how you move</h1>
       <div className="screen-hint">{journeys.length} journey{journeys.length === 1 ? '' : 's'}</div>
     </div>
+
+    {!journeys.length && <div className="no-change-card large">
+      <div><strong>No travel between appointments.</strong><span>There is nothing to optimize because all locations are the same.</span></div>
+    </div>}
 
     <div className="journey-list">
       {journeys.map((journey, index) => <article className="journey-card" key={journey.tripId}>
@@ -40,13 +45,19 @@ export function TravelScreen({ journeys, setJourneys, maxExtra, setMaxExtra, onB
           <div className="mode-block">
             <span className="field-label">Usual mode</span>
             <div className="mode-grid">
-              {modes.map((mode) => <button
-                aria-pressed={journey.mode === mode.value}
-                className={journey.mode === mode.value ? 'selected' : ''}
-                key={mode.value}
-                onClick={() => update(journey.tripId, { mode: mode.value as TransportMode })}
-              ><ModeIcon mode={mode.value}/><span>{mode.label}</span></button>)}
+              {modes.map((mode) => {
+                const unavailable = mode.value === 'bike' && !isDemo;
+                return <button
+                  aria-pressed={journey.mode === mode.value}
+                  className={journey.mode === mode.value ? 'selected' : ''}
+                  disabled={unavailable}
+                  title={unavailable ? 'Live bicycle routing is not available from the configured route provider' : undefined}
+                  key={mode.value}
+                  onClick={() => update(journey.tripId, { mode: mode.value as TransportMode })}
+                ><ModeIcon mode={mode.value}/><span>{mode.label}</span></button>;
+              })}
             </div>
+            {!isDemo && <span className="fine-print">Bike is disabled in live mode because the configured AWS route provider cannot verify bicycle routes in this region.</span>}
           </div>
         </div>
       </article>)}
@@ -64,6 +75,10 @@ export function TravelScreen({ journeys, setJourneys, maxExtra, setMaxExtra, onB
       </div>
     </section>
 
-    <div className="sticky-actions solid"><button className="primary cta" onClick={onAnalyze}>Check my day<ArrowRight size={18}/></button></div>
+    <div className="sticky-actions solid">
+      <button className="primary cta" disabled={!journeys.length} onClick={onAnalyze}>
+        {journeys.length ? 'Check my day' : 'Nothing to optimize'}<ArrowRight size={18}/>
+      </button>
+    </div>
   </div>;
 }

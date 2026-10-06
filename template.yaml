@@ -59,12 +59,28 @@ Resources:
 
   PrepareFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/prepare.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/prepare.handler
 
   OptimizeFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/optimize.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/optimize.handler
@@ -80,6 +96,14 @@ Resources:
 
   PersistFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/persist.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/persist.handler
@@ -134,6 +158,14 @@ Resources:
 
   AnalyzeApiFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/analyze-api.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/analyze-api.handler
@@ -155,6 +187,14 @@ Resources:
 
   IcsFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/ics.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/ics.handler
@@ -167,6 +207,14 @@ Resources:
 
   DemoFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/demo.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/demo.handler
@@ -179,6 +227,14 @@ Resources:
 
   AcceptFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/accept.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/accept.handler
@@ -194,6 +250,14 @@ Resources:
 
   HistoryFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/history.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/history.handler
@@ -209,6 +273,14 @@ Resources:
 
   MapFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/map.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/map.handler
@@ -231,6 +303,14 @@ Resources:
 
   ExplainFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/explain.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/explain.handler

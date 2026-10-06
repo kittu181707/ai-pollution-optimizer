@@ -11,9 +11,9 @@ export function LandingScreen({ onImport, onManual, onDemo, busy, error }: {
   return <div className="landing screen narrow">
     <Brand/>
     <div className="landing-copy">
-      <div className="eyebrow">TODAY, WITH LESS EXPOSURE</div>
-      <h1>Plan the day you already have.</h1>
-      <div className="hero-line">Same appointments. Better route and timing choices.</div>
+      <div className="eyebrow">FROM AIR DATA TO ACTION</div>
+      <h1>Know the one part of your day worth changing.</h1>
+      <div className="hero-line">Same appointments. Less modeled pollution exposure.</div>
     </div>
 
     <div className="quick-signals" aria-label="Environmental factors">
