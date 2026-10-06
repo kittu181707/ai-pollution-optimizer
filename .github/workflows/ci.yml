@@ -75,7 +75,7 @@ jobs:
             'LOCATION:Office',
             'END:VEVENT',
             'END:VCALENDAR',
-          ].join('\\r\\n');
+          ].join('\r\n');
           const imported = await fetch('http://127.0.0.1:3001/api/ics/parse', {
             method:'POST',
             headers:{'content-type':'application/json'},
