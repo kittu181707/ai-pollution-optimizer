@@ -1,0 +1,7 @@
+import type { CalendarEvent } from '../types';
+function unfold(text:string){return text.replace(/\r?\n[ \t]/g,'').split(/\r?\n/)}
+function value(line:string){const index=line.indexOf(':');return index>=0?line.slice(index+1).trim():''}
+function decode(text:string){return text.replace(/\\n/gi,' ').replace(/\\,/g,',').replace(/\\;/g,';').replace(/\\\\/g,'\\')}
+function parseTime(raw:string){const match=raw.match(/T?(\d{2})(\d{2})(\d{2})?/);return match?`${match[1]}:${match[2]}`:'09:00'}
+function parseDate(raw:string){const match=raw.match(/(\d{4})(\d{2})(\d{2})/);return match?`${match[1]}-${match[2]}-${match[3]}`:new Date().toISOString().slice(0,10)}
+export function parseIcs(icsText:string){const lines=unfold(icsText);const events:CalendarEvent[]=[];let current:Record<string,string>|null=null;for(const line of lines){if(line==='BEGIN:VEVENT'){current={};continue}if(line==='END:VEVENT'&&current){if(current.DTSTART&&current.SUMMARY)events.push({eventId:current.UID||`event-${events.length+1}`,title:decode(current.SUMMARY),location:decode(current.LOCATION||''),start:parseTime(current.DTSTART),end:parseTime(current.DTEND||current.DTSTART),fixed:true});current=null;continue}if(!current)continue;const key=line.split(':',1)[0].split(';',1)[0];if(['UID','SUMMARY','LOCATION','DTSTART','DTEND'].includes(key))current[key]=value(line)}const dateLine=lines.find((line)=>line.startsWith('DTSTART'));return{date:dateLine?parseDate(value(dateLine)):new Date().toISOString().slice(0,10),homeLocation:'Home',events:events.sort((a,b)=>a.start.localeCompare(b.start))}}

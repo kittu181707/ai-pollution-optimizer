@@ -1,116 +1,202 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  ai-pollution-optimizer
-  SAM Template for the backend of AI Personal Pollution Optimizer
+Description: PROJECT_NAME whole-day environmental exposure optimizer
+
+Parameters:
+  DemoMode:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+  BedrockModelId:
+    Type: String
+    Default: ''
 
 Globals:
   Function:
-    Timeout: 10
-    MemorySize: 256
     Runtime: nodejs20.x
-    Architectures:
-      - x86_64
+    Architectures: [x86_64]
+    Timeout: 30
+    MemorySize: 512
     Environment:
       Variables:
-        TABLE_NAME: !Ref TripsTable
-        DEMO_MODE: 'false'
+        TABLE_NAME: !Ref PlansTable
+        DEMO_MODE: !Ref DemoMode
+        BEDROCK_MODEL_ID: !Ref BedrockModelId
+        GEOCODER_USER_AGENT: 'PROJECT_NAME/0.1'
   Api:
     Cors:
       AllowMethods: "'GET,POST,OPTIONS'"
-      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowHeaders: "'Content-Type,Authorization'"
       AllowOrigin: "'*'"
 
 Resources:
-  TripsTable:
+  PlansTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ai-pollution-optimizer-trips
+      BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: userId
+        - AttributeName: pk
           AttributeType: S
-        - AttributeName: tripId
+        - AttributeName: sk
           AttributeType: S
       KeySchema:
-        - AttributeName: userId
+        - AttributeName: pk
           KeyType: HASH
-        - AttributeName: tripId
+        - AttributeName: sk
           KeyType: RANGE
-      BillingMode: PAY_PER_REQUEST
+
+  PrepareFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/prepare.handler
 
   OptimizeFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: backend/
       Handler: src/handlers/optimize.handler
+      Timeout: 60
+      MemorySize: 768
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - geo-routes:CalculateRoutes
+              Resource: '*'
+
+  PersistFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/persist.handler
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Ref TripsTable
+            TableName: !Ref PlansTable
+
+  OptimizationStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Type: EXPRESS
+      Definition:
+        StartAt: Prepare
+        States:
+          Prepare:
+            Type: Task
+            Resource: !GetAtt PrepareFunction.Arn
+            Next: Optimize
+          Optimize:
+            Type: Task
+            Resource: !GetAtt OptimizeFunction.Arn
+            Next: Persist
+          Persist:
+            Type: Task
+            Resource: !GetAtt PersistFunction.Arn
+            End: true
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref PrepareFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref OptimizeFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref PersistFunction
+
+  AnalyzeApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/analyze-api.handler
+      Timeout: 90
+      Environment:
+        Variables:
+          WORKFLOW_ARN: !Ref OptimizationStateMachine
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: states:StartSyncExecution
+              Resource: !Ref OptimizationStateMachine
       Events:
-        Optimize:
+        Analyze:
           Type: Api
           Properties:
-            Path: /api/optimize
+            Path: /api/day/analyze
             Method: post
 
-  EnvironmentFunction:
+  IcsFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: backend/
-      Handler: src/handlers/environment.handler
+      Handler: src/handlers/ics.handler
       Events:
-        Environment:
+        ImportIcs:
           Type: Api
           Properties:
-            Path: /api/environment
-            Method: get
-
-  TripAcceptFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: backend/
-      Handler: src/handlers/trip.acceptHandler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TripsTable
-      Events:
-        TripAccept:
-          Type: Api
-          Properties:
-            Path: /api/trip/accept
+            Path: /api/ics/parse
             Method: post
 
-  DashboardFunction:
+  DemoFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: backend/
-      Handler: src/handlers/dashboard.dashboardHandler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TripsTable
+      Handler: src/handlers/demo.handler
       Events:
-        Dashboard:
+        Demo:
           Type: Api
           Properties:
-            Path: /api/dashboard
+            Path: /api/demo/day
             Method: get
 
-  ImpactFunction:
+  AcceptFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: backend/
-      Handler: src/handlers/dashboard.impactHandler
+      Handler: src/handlers/accept.handler
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Ref TripsTable
+            TableName: !Ref PlansTable
       Events:
-        Impact:
+        Accept:
           Type: Api
           Properties:
-            Path: /api/impact
+            Path: /api/plan/accept
+            Method: post
+
+  HistoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/history.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PlansTable
+      Events:
+        History:
+          Type: Api
+          Properties:
+            Path: /api/history
             Method: get
+
+  ExplainFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/explain.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource: '*'
+      Events:
+        Explain:
+          Type: Api
+          Properties:
+            Path: /api/explain
+            Method: post
 
 Outputs:
   ApiEndpoint:
-    Description: "API Gateway endpoint URL"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/api/"
+    Description: API Gateway base URL
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
+  StateMachineArn:
+    Description: Optimization workflow ARN
+    Value: !Ref OptimizationStateMachine

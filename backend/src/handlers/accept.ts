@@ -1,0 +1,2 @@
+import type { APIGatewayProxyEvent } from 'aws-lambda'; import { body,json } from '../http'; import { acceptPlan } from '../services/persistence';
+export const handler=async(event:APIGatewayProxyEvent)=>{try{const input=body<{userId:string;planId:string}>(event.body);if(!input.userId||!input.planId)return json(400,{message:'userId and planId are required'});return json(200,await acceptPlan(input.userId,input.planId))}catch(e){console.error(e);return json(500,{message:e instanceof Error?e.message:'Could not accept plan'})}};

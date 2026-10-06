@@ -1,0 +1,7 @@
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import type { DayAnalysis } from '../types';
+const table=()=>process.env.TABLE_NAME||'project-name-plans';const doc=()=>DynamoDBDocumentClient.from(new DynamoDBClient({}));
+export async function persistDraft(plan:DayAnalysis){if(process.env.LOCAL_MODE==='true')return plan;await doc().send(new PutCommand({TableName:table(),Item:{pk:`PLAN#${plan.planId}`,sk:'PLAN',status:'analyzed',createdAt:plan.createdAt,plan}}));return plan}
+export async function acceptPlan(userId:string,planId:string){if(process.env.LOCAL_MODE==='true')throw new Error('LOCAL_ACCEPT');const result=await doc().send(new GetCommand({TableName:table(),Key:{pk:`PLAN#${planId}`,sk:'PLAN'}}));if(!result.Item?.plan)throw new Error('Plan not found');const acceptedAt=new Date().toISOString(),plan={...result.Item.plan,acceptedAt};await doc().send(new PutCommand({TableName:table(),Item:{pk:`USER#${userId}`,sk:`PLAN#${acceptedAt}#${planId}`,planId,acceptedAt,plan}}));return plan}
+export async function history(userId:string){if(process.env.LOCAL_MODE==='true')return[];const result=await doc().send(new QueryCommand({TableName:table(),KeyConditionExpression:'pk = :pk',ExpressionAttributeValues:{':pk':`USER#${userId}`},ScanIndexForward:false,Limit:20}));return(result.Items||[]).map(item=>item.plan)}

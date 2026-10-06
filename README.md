@@ -1,81 +1,48 @@
-# AI Personal Pollution Optimizer
+# PROJECT_NAME
 
-## Problem
-Delhi residents can see pollution data (AQI), but pollution dashboards don't tell them how to change everyday decisions. Most users just check the AQI and go about their day, absorbing the pollution anyway.
+Whole-day personal environmental exposure optimizer. The app imports a user's agenda, confirms travel, evaluates route/timing alternatives on AWS, and recommends the smallest realistic changes that reduce modeled pollution, heat, UV and weather exposure without moving fixed appointments.
 
-## Solution
-Our system turns environmental data into personalized travel decisions.
-Instead of simply showing users the current AQI, our application analyzes a user's planned trip and recommends a better travel option based on:
-1. Estimated pollution exposure
-2. Estimated transport emissions (CO2e)
-3. Travel time
-4. User preferences
+> Branding is intentionally a placeholder. Set `VITE_PRODUCT_NAME` when the final name is chosen.
 
-## Features
-- **Personalized Optimizer:** Compares routes across Metro, Bus, Car, Cycle, and Walk.
-- **Exposure Model:** Transparent estimation of personal pollution exposure based on travel mode, time, and ambient pollution.
-- **Emissions Model:** Configurable estimation of Transport CO2e footprints per route.
-- **Eco Dashboard:** Personal tracker showing trips optimized, Eco points, and estimated CO2e avoided.
-- **Collective Impact:** Real-time (simulated for demo) view of Delhi's collective pollution savings.
+## Implemented
 
-## Real External APIs Used
-- **Geocoding:** Nominatim (OpenStreetMap) API.
-- **Routing:** OSRM Public API (for Car, Walk, Cycle). Transit options are currently extrapolated/estimated based on road distance due to MVP constraints.
-- **Environmental Data:** Open-Meteo Air Quality & Weather API.
-- **Mapping:** React-Leaflet overlaying OpenStreetMap tiles.
+- Manual agenda entry and `.ics` calendar import.
+- Controlled demo day.
+- Multi-journey travel confirmation and maximum-extra-travel preference.
+- Amazon Location Routes V2 for live car, pedestrian and transit candidates; deterministic Lambda bike heuristic.
+- Backend pollution/weather/UV inputs.
+- Deterministic modeled exposure scoring; Bedrock never produces numeric scores.
+- Whole-day combinatorial optimization with arrival and time-budget constraints.
+- Before/after metrics, exact changes, route comparison, explanation drawer, accepted plan and history.
+- API Gateway + Lambda + Express Step Functions + DynamoDB + Bedrock + Amplify deployment setup.
 
-## Architecture
-- **Frontend:** React, Vite, TypeScript, TailwindCSS v4, Leaflet Map
-- **Backend (AWS):** API Gateway, AWS Lambda (NodeJS 20), DynamoDB
-- **Database:** DynamoDB (`userId`, `tripId`, `timestamp`, etc.)
-- **Infrastructure:** AWS SAM (`template.yaml` provided)
+## Local development
 
-## Environment Variables
-- `VITE_API_BASE_URL` (Frontend): URL to your deployed API Gateway (or `http://localhost:3001` for local Express testing)
-- `DEMO_MODE` (Backend): Set to `'true'` to use simulated endpoints if APIs are down.
-- `TABLE_NAME` (Backend): Name of the DynamoDB table (default: `ai-pollution-optimizer-trips`)
-
-## AWS Deployment
-1. Set up your AWS credentials locally.
-2. Ensure you have the AWS SAM CLI installed.
-3. Deploy the backend:
-   ```bash
-   sam build
-   sam deploy --guided
-   ```
-4. Deploy the frontend to AWS Amplify, providing the `VITE_API_BASE_URL` as an environment variable in the Amplify Console.
-
-## Local Testing
-To test the backend without AWS credentials, a local Express wrapper is provided.
 ```bash
-cd backend
-npm install
-npm run start
-```
-Then run the frontend in a separate terminal:
-```bash
-cd frontend
-npm install
-npm run dev
+cd backend && npm install && cp .env.example .env && npm run dev
+cd frontend && npm install && cp .env.example .env && npm run dev
 ```
 
-## How the Optimization Works (Deterministically)
-The optimization engine scores trips based on three normalized pillars:
-- `Exposure`
-- `Emissions`
-- `Travel Time`
-A deterministic algorithm in the AWS Lambda weights these inputs based on user preference ("Lowest Pollution Exposure", "Lowest Emission", "Fastest", or "Balanced"). 
+Open `http://localhost:5173`. Demo mode keeps all optimization on the backend while controlling external data.
 
-## Important Scientific Distinction
-- **Estimated Exposure:** Calculated as `Live PM2.5 × Travel Time × Transport Exposure Factor`. It represents the pollution absorbed by the user.
-- **Estimated CO2e Emissions:** Calculated as `Distance × Transport CO2e Factor`. It represents the climate impact of the chosen transport mode.
+## AWS deployment
 
-## Cost Considerations
-This MVP is designed to stay 100% within AWS Free Tier credits:
-- Serverless Lambda runs only on invocation.
-- DynamoDB is configured to `PAY_PER_REQUEST`.
-- Open-Meteo and OSRM APIs are free for moderate use.
+```bash
+sam build
+sam deploy --guided
+```
 
-## Limitations & Future Improvements
-- OSRM does not support public transit routes natively, so transit distances are estimated.
-- Pollution interpolation is simplified to the origin node. A future improvement would sample PM2.5 at 1km intervals along the OSRM route geometry.
+Deploy `frontend/` to Amplify and set `VITE_API_BASE_URL` to the SAM `ApiEndpoint` output. Optionally set `VITE_PRODUCT_NAME` and `BedrockModelId` later.
+
+The browser never runs the optimizer. In production, `/api/day/analyze` starts the Step Functions workflow; analysis does not silently fall back to client-side optimization.
+
+## Scientific language
+
+Results use **modeled exposure**, **estimated exposure reduction**, **high-UV outdoor time**, and **lower-exposure route**. The product does not claim medical safety, disease avoidance, or exact inhaled dose.
+
+## Validation
+
+```bash
+cd backend && npm run typecheck && npm test
+cd ../frontend && npm run typecheck && npm run build
+```
