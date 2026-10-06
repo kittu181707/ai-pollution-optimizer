@@ -1,6 +1,6 @@
 # Configuration
 
-Frontend: `VITE_API_BASE_URL` and optional `VITE_PRODUCT_NAME` (defaults to `PROJECT_NAME`).
+Frontend: `VITE_API_BASE_URL` and optional `VITE_PRODUCT_NAME` (defaults to `AI Personal Pollution Optimizer`).
 
 Backend: `DEMO_MODE`, `TABLE_NAME`, `WORKFLOW_ARN`, optional `BEDROCK_MODEL_ID`, `GEOCODER_USER_AGENT`, and AWS region.
 

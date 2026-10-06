@@ -32,4 +32,5 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ planId, tripId: trip.tripId, change: trip }),
   }),
+  getIndia: () => request<{ stations: Array<{ name: string; lat: number; lon: number; aqi: number; pm25: number; pm10: number; source: string; updated: string }> }>('/api/india'),
 };

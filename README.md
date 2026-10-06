@@ -1,8 +1,6 @@
-# PROJECT_NAME
+# AI Personal Pollution Optimizer
 
-Whole-day personal environmental exposure optimizer. The app imports a user's agenda, confirms travel, evaluates route/timing alternatives on AWS, and recommends the smallest realistic changes that reduce modeled pollution, heat, UV and weather exposure without moving fixed appointments.
-
-> Branding is intentionally a placeholder. Set `VITE_PRODUCT_NAME` when the final name is chosen.
+Make every journey healthier, without changing your day. Whole-day personal environmental exposure optimizer. The app imports a user's agenda, confirms travel, evaluates route/timing alternatives on AWS, and recommends the smallest realistic changes that reduce modeled pollution, heat, UV and weather exposure without moving fixed appointments.
 
 ## Implemented
 

@@ -5,6 +5,7 @@ import type { APIGatewayProxyEvent } from "aws-lambda";
 import { handler as ics } from "./src/handlers/ics";
 import { handler as demo } from "./src/handlers/demo";
 import { handler as explain } from "./src/handlers/explain";
+import { handler as india } from "./src/handlers/india";
 import { runDirectAnalysis } from "./src/services/analyze";
 import { handler as prepare } from "./src/handlers/prepare";
 process.env.LOCAL_MODE = "true";
@@ -65,6 +66,9 @@ app.get("/api/impact/community", (req, res) =>
 );
 app.post("/api/explain", async (req, res) =>
   send(res, await explain(event(req))),
+);
+app.get("/api/india", async (req, res) =>
+  send(res, await india()),
 );
 app.listen(3001, () => console.log("Local backend on http://localhost:3001"));
 setInterval(() => {}, 1000 * 60 * 60);

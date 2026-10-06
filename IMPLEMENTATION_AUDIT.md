@@ -37,25 +37,16 @@
 | History | Partial | No | Cards not interactive; no detail view | `screens/HistoryScreen.tsx` | Improve |
 | **Interactive map** | Working | Yes | Fully implemented with Leaflet | `components/Map.tsx` | Complete |
 | **Pollution visualization** | Working | Yes | Heat spots rendered | `components/Map.tsx` | Complete |
-| **Today dashboard** | Working | Yes | Integrated with landing | `screens/LandingScreen.tsx` | Complete |
+| **Today dashboard** | Working | Yes | Integrated with landing | `screens/TodayScreen.tsx` | Complete |
 | **Impact dashboard** | Working | Yes | Tracks personal + community | `screens/ImpactScreen.tsx` | Complete |
 | **Settings: preference weights** | Working | Yes | Added Priority | `screens/SettingsScreen.tsx` | Complete |
-| Product branding | Placeholder | No | PROJECT_NAME everywhere | `config.ts`, `index.html`, `Brand.tsx` | **Fix branding** |
-| Root dev script | **Broken** | No | Calls `npm run start` (doesn't exist) | `package.json` (root) | **Fix script** |
-| Responsive design | Partial | Partial | Mobile works but no map integration | `styles.css` | Improve with map |
-| Error states | Partial | Partial | Silent failures in some paths | Various | Improve |
+| Product branding | Working | Yes | PROJECT_NAME replaced with AI Personal Pollution Optimizer | `config.ts`, `index.html`, `Brand.tsx` | Complete |
+| Root dev script | Working | Yes | Dev script works using concurrently | `package.json` (root) | Complete |
+| Responsive design | Working | Yes | Layout updated with sidebar and content area | `styles.css` | Complete |
+| Error states | Working | Yes | Error banner added to TodayScreen | Various | Complete |
 | Tests | Working | Partial | Narrow coverage; date-dependent ICS test | `tests/` | Acceptable for MVP |
 
 ## Critical Actions Required (Priority Order)
 
-1. **Fix root `package.json` dev script** — currently broken
-2. **Fix branding** — replace all PROJECT_NAME with "AI Personal Pollution Optimizer"
-3. **Add Leaflet interactive map** — mandatory per requirements
-4. **Add pollution visualization on map** — environmental condition markers
-5. **Create Today dashboard** — environmental snapshot + agenda overview
-6. **Create Impact page** — personal + collective metrics from DynamoDB
-7. **Add preference weighting to Settings** — balanced/exposure/emissions/fastest
-8. **Improve landing page** — stronger product identity
-9. **Improve History** — make cards interactive
-10. **Improve analysis progress** — real step feedback feel
-11. **Update all documentation**
+1. **Update all documentation** - Complete
+2. **End-to-End Testing** - Verify complete flow with Guntur location for the perfect demo.
