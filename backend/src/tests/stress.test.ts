@@ -3,6 +3,9 @@ import { handler as prepare } from '../handlers/prepare';
 import { parseIcs } from '../core/ics';
 import { isValidTime, timeToMinutes } from '../core/time';
 import { optimizeCandidateSets } from '../core/optimizer';
+import { demoDay } from '../core/demo';
+import { runDirectAnalysis } from '../services/analyze';
+import { availableMinutes } from '../core/time';
 import type { RouteCandidate, TripCandidateSet } from '../types';
 
 const env = { pm25: 90, pm10: 130, aqi: 120, temperature: 33, uvIndex: 7, rainProbability: 10, source: 'stress' };
@@ -103,6 +106,33 @@ async function main() {
     }),
     /does not match/,
   );
+
+  const day = demoDay();
+  const demoRequest = {
+    ...day,
+    userId: 'e2e-user',
+    maxExtraMinutes: 10,
+    demoMode: true,
+    journeys: [
+      { tripId: 'd1', origin: 'Home, Delhi', destination: 'Delhi Technological University', departureTime: '07:45', arriveBy: '08:30', mode: 'car' as const },
+      { tripId: 'd2', origin: 'Delhi Technological University', destination: 'Connaught Place', departureTime: '12:00', arriveBy: '13:00', mode: 'metro' as const },
+      { tripId: 'd3', origin: 'Connaught Place', destination: 'Gym, Delhi', departureTime: '17:45', arriveBy: '18:30', mode: 'metro' as const },
+      { tripId: 'd4', origin: 'Gym, Delhi', destination: 'Home, Delhi', departureTime: '19:20', arriveBy: '20:00', mode: 'bike' as const },
+    ],
+  };
+  const preparedDemo = await prepare(demoRequest);
+  const endToEnd = await runDirectAnalysis(preparedDemo);
+  assert.equal(endToEnd.trips.length, 4);
+  assert.equal(endToEnd.metrics.appointmentsChanged, 0);
+  assert(endToEnd.metrics.extraTravelMinutes <= 10);
+  assert(endToEnd.metrics.exposureReductionPct >= 0);
+  assert(endToEnd.workflow.routeSource.includes('Controlled demo route data'));
+  assert(endToEnd.workflow.environmentSource.includes('Controlled demo environmental data'));
+  endToEnd.trips.forEach((trip, index) => {
+    const arriveBy = demoRequest.journeys[index].arriveBy;
+    assert(trip.recommended.travelMinutes <= availableMinutes(trip.recommended.departureTime, arriveBy));
+    assert(trip.candidatesEvaluated > 0);
+  });
 
   console.log('stress and validation tests passed');
 }
