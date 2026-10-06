@@ -2,7 +2,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import type { DayAnalysis } from '../types';
 
-const table = () => process.env.TABLE_NAME || 'project-name-plans';
+const table = () => process.env.TABLE_NAME || 'ai-pollution-optimizer-plans';
 let documentClient: DynamoDBDocumentClient | undefined;
 
 function doc() {
