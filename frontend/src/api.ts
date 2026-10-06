@@ -21,7 +21,10 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = 15_000):
   }
 }
 
+export interface RuntimeConfig { region:string; mapStyle:string; mapApiKey:string | null; source:string }
+
 export const api = {
+  runtimeConfig: () => request<RuntimeConfig>('/api/config', undefined, 10_000),
   getDemoDay: () => request<AgendaPayload>('/api/demo/day'),
   parseIcs: (icsText: string) => request<AgendaPayload>('/api/ics/parse', { method: 'POST', body: JSON.stringify({ icsText }) }, 20_000),
   analyzeDay: (payload: AnalyzeDayRequest) => request<DayAnalysis>('/api/day/analyze', { method: 'POST', body: JSON.stringify(payload) }, 90_000),
