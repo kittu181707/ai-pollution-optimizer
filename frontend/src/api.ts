@@ -27,7 +27,6 @@ export const api = {
   analyzeDay: (payload: AnalyzeDayRequest) => request<DayAnalysis>('/api/day/analyze', { method: 'POST', body: JSON.stringify(payload) }, 75_000),
   acceptPlan: (userId: string, planId: string) => request<AcceptedPlan>('/api/plan/accept', { method: 'POST', body: JSON.stringify({ userId, planId }) }),
   history: (userId: string) => request<{ plans: AcceptedPlan[] }>(`/api/history?userId=${encodeURIComponent(userId)}`),
-  communityImpact: () => request<{ totalPlans: number; totalCo2eSaved: number }>('/api/impact/community'),
   explain: (planId: string, trip: TripAnalysis) => request<{ explanation: string; source: string }>('/api/explain', {
     method: 'POST',
     body: JSON.stringify({ planId, tripId: trip.tripId, change: trip }),

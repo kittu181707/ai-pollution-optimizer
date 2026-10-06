@@ -1,16 +1,42 @@
-import { ArrowRight, CalendarPlus, FileUp, Sparkles } from 'lucide-react';
+import { ArrowRight, CalendarPlus, FileUp, Play } from 'lucide-react';
 import { Brand } from '../components/Brand';
 
-export function LandingScreen({ onImport, onManual, onDemo, busy }: { onImport: () => void; onManual: () => void; onDemo: () => void; busy: boolean }) {
+export function LandingScreen({ onImport, onManual, onDemo, busy, error }: {
+  onImport: () => void;
+  onManual: () => void;
+  onDemo: () => void;
+  busy: boolean;
+  error?: string;
+}) {
   return <div className="landing screen narrow">
     <Brand/>
-    <div className="landing-copy"><p className="eyebrow">AI PERSONAL POLLUTION OPTIMIZER</p><h1>Your day is already planned.<br/>We make the journey better.</h1><p>Understands your existing appointments, analyzes real environmental conditions around every trip, and finds the smallest changes to your route or transport to reduce your exposure.</p></div>
-    <div className="stack actions">
-      <button className="primary large" onClick={onImport}><FileUp/>Import today's calendar<ArrowRight/></button>
-      <button className="secondary large" onClick={onManual}><CalendarPlus/>Add today manually</button>
-      <button className="text-button" disabled={busy} onClick={onDemo}><Sparkles/>{busy ? 'Loading demo…' : 'Try Demo Day'}</button>
+    <div className="landing-copy">
+      <div className="eyebrow">TODAY, WITH LESS EXPOSURE</div>
+      <h1>Plan the day you already have.</h1>
+      <div className="hero-line">Same appointments. Better route and timing choices.</div>
     </div>
-    <p className="signal-row">Air Quality <span/> Heat Risk <span/> UV Index <span/> Live Weather <span/> Traffic Conditions</p>
-    <p className="bottom-line">Make every journey healthier, without changing your day.</p>
+
+    <div className="quick-signals" aria-label="Environmental factors">
+      <span>Pollution</span><span>Heat</span><span>UV</span><span>Weather</span>
+    </div>
+
+    {error && <div className="error-banner" role="alert">{error}</div>}
+
+    <div className="choice-stack">
+      <button className="primary action-card" onClick={onImport}>
+        <span className="action-icon"><FileUp size={20}/></span>
+        <span><strong>Import calendar</strong><small>.ics file</small></span>
+        <ArrowRight size={19}/>
+      </button>
+      <button className="secondary action-card" onClick={onManual}>
+        <span className="action-icon"><CalendarPlus size={20}/></span>
+        <span><strong>Enter my day</strong><small>Add events manually</small></span>
+        <ArrowRight size={19}/>
+      </button>
+    </div>
+
+    <button className="demo-link" disabled={busy} onClick={onDemo}>
+      <Play size={15}/>{busy ? 'Loading demo' : 'Try a 30-second demo'}
+    </button>
   </div>;
 }

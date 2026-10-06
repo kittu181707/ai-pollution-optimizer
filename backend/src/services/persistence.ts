@@ -1,5 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import type { DayAnalysis } from '../types';
 
 const table = () => process.env.TABLE_NAME || 'project-name-plans';
@@ -44,7 +44,6 @@ export async function acceptPlan(userId: string, planId: string) {
 
   const acceptedAt = new Date().toISOString();
   const plan = { ...draft.plan, acceptedAt };
-  
   await doc().send(new PutCommand({
     TableName: table(),
     Item: {
@@ -55,26 +54,6 @@ export async function acceptPlan(userId: string, planId: string) {
       plan,
     },
   }));
-
-  // Update global impact stats
-  const co2eSaved = plan.metrics?.estimatedCo2eChangeKg
-    ? Math.max(0, -plan.metrics.estimatedCo2eChangeKg) // Negative change is savings
-    : 0;
-
-  try {
-    await doc().send(new UpdateCommand({
-      TableName: table(),
-      Key: { pk: 'GLOBAL', sk: 'IMPACT' },
-      UpdateExpression: 'ADD totalPlans :one, totalCo2eSaved :co2e',
-      ExpressionAttributeValues: {
-        ':one': 1,
-        ':co2e': co2eSaved
-      }
-    }));
-  } catch (err) {
-    console.error('Failed to update global impact', err);
-  }
-
   return plan;
 }
 
@@ -88,16 +67,4 @@ export async function history(userId: string) {
     Limit: 20,
   }));
   return (result.Items || []).map((item) => item.plan);
-}
-
-export async function communityImpact() {
-  if (process.env.LOCAL_MODE === 'true') return { totalPlans: 0, totalCo2eSaved: 0 };
-  const result = await doc().send(new GetCommand({
-    TableName: table(),
-    Key: { pk: 'GLOBAL', sk: 'IMPACT' },
-  }));
-  return {
-    totalPlans: result.Item?.totalPlans || 0,
-    totalCo2eSaved: result.Item?.totalCo2eSaved || 0,
-  };
 }
