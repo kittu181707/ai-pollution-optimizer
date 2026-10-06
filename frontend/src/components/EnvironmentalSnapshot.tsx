@@ -50,8 +50,9 @@ export function EnvironmentalSnapshot({ analysis }: { analysis: DayAnalysis }) {
   const routeSnapshot = useMemo(() => samples.length ? aggregate(samples) : null, [analysis.planId]);
   const focusTrip = analysis.changes[0] || analysis.trips[0];
   const focusSamples = focusTrip?.recommended.environmentSamples || [];
+  const focusGeometry = focusTrip?.recommended.geometry || [];
   const focusPosition = focusSamples[Math.floor(focusSamples.length / 2)]?.position
-    || focusTrip?.recommended.geometry[Math.floor(focusTrip.recommended.geometry.length / 2)];
+    || focusGeometry[Math.floor(focusGeometry.length / 2)];
 
   const shouldRefresh = Boolean(
     focusPosition
