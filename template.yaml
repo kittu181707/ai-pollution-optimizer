@@ -48,6 +48,8 @@ Resources:
       KeyName: !Sub '${AWS::StackName}-web-map'
       Description: ClearRoute browser key restricted to Amazon Location Maps V2 rendering
       NoExpiry: true
+      ForceDelete: true
+      ForceUpdate: true
       Restrictions:
         AllowActions:
           - geo-maps:*
