@@ -65,9 +65,12 @@ assert(styles.includes('.dashboard-hero-grid') && styles.includes('.dashboard-de
 assert(!styles.includes('.split-layout') && !styles.includes('.exposure-hero'), 'retired dashboard CSS must not return');
 assert(styles.includes('grid-template-columns: 228px'), 'desktop navigation shell width changed unexpectedly');
 assert(config.includes("'ClearRoute'") && !config.includes("'PROJECT_NAME'"), 'default product branding must not ship as a placeholder');
-assert(config.includes('VITE_AMAZON_LOCATION_API_KEY') && config.includes('VITE_AWS_REGION'), 'Amazon Location live-map configuration is missing');
+assert(config.includes('VITE_AMAZON_LOCATION_API_KEY') && config.includes('VITE_AWS_REGION'), 'Amazon Location live-map override configuration is missing');
+assert(api.includes("'/api/config'"), 'frontend must auto-discover the deployed Amazon map configuration');
 assert(routePreview.includes('LiveRouteMap'), 'route comparison must prefer the interactive Amazon Location map');
 assert(routePreview.includes('api.routeMap'), 'route comparison must preserve the hardened Amazon static-map fallback');
+assert(liveRouteMap.includes("from 'maplibre-gl'") && packageJson.includes('maplibre-gl'), 'MapLibre must be bundled with the app, not fetched from a runtime CDN');
+assert(!liveRouteMap.includes('cdn.jsdelivr.net') && !liveRouteMap.includes('unpkg.com'), 'live map must not depend on a third-party runtime CDN');
 assert(liveRouteMap.includes('maps.geo.') && liveRouteMap.includes('/v2/styles/'), 'live map must use Amazon Location Maps V2');
 assert(liveRouteMap.includes("traffic: 'All'"), 'live Amazon map must request real-time traffic rendering');
 assert(liveRouteMap.includes('fitBounds') && liveRouteMap.includes('NavigationControl'), 'live map must remain interactive and fit selected routes');
