@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './api';
-import { BottomNav, type NavTab } from './components/BottomNav';
-import { DayRoutePanel } from './components/DayRoutePanel';
+import { AppShell } from './components/AppShell';
+import type { NavTab } from './components/BottomNav';
 import { Drawer } from './components/Drawer';
 import { AcceptedScreen } from './screens/AcceptedScreen';
 import { AnalysisScreen } from './screens/AnalysisScreen';
-import { ChangesScreen } from './screens/ChangesScreen';
 import { FinalPlanScreen } from './screens/FinalPlanScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { ImportScreen } from './screens/ImportScreen';
@@ -18,7 +17,7 @@ import { deriveJourneys, getUserId, localDate, readStoredNumber, storeNumber, ui
 
 const blankAgenda = (): AgendaPayload => ({ date: localDate(), homeLocation: 'Home', events: [] });
 const blankEvent = (): CalendarEvent => ({ eventId: uid('event'), title: '', location: '', start: '09:00', end: '10:00', fixed: true });
-type Step = 'landing'|'import'|'manual'|'travel'|'analysis'|'overview'|'changes'|'final'|'accepted';
+type Step = 'landing'|'import'|'manual'|'travel'|'analysis'|'overview'|'final'|'accepted';
 type AgendaMode = 'import' | 'manual';
 
 export default function App() {
@@ -46,6 +45,18 @@ export default function App() {
   const setMaxExtra = (value: number) => {
     setMaxExtraState(value);
     storeNumber('max_extra_minutes', value);
+  };
+
+  const resetDay = () => {
+    setAnalysis(null);
+    setAccepted(null);
+    setIsDemo(false);
+    setAgenda(blankAgenda());
+    setJourneys([]);
+    setError(undefined);
+    setWhyTrip(null);
+    setTab('today');
+    setStep('landing');
   };
 
   const startAgenda = (mode: AgendaMode) => {
@@ -191,10 +202,15 @@ export default function App() {
   };
 
   if (tab === 'history') {
-    return <><HistoryScreen plans={history} loading={historyLoading} error={historyError} onRefresh={refreshHistory}/><BottomNav active={tab} onChange={onNav}/></>;
+    return <AppShell active={tab} onChange={onNav}>
+      <HistoryScreen plans={history} loading={historyLoading} error={historyError} onRefresh={refreshHistory}/>
+    </AppShell>;
   }
+
   if (tab === 'settings') {
-    return <><SettingsScreen maxExtra={maxExtra} setMaxExtra={setMaxExtra}/><BottomNav active={tab} onChange={onNav}/></>;
+    return <AppShell active={tab} onChange={onNav}>
+      <SettingsScreen maxExtra={maxExtra} setMaxExtra={setMaxExtra}/>
+    </AppShell>;
   }
 
   let content;
@@ -202,30 +218,28 @@ export default function App() {
   else if (step === 'import' || step === 'manual') content = <ImportScreen agenda={agenda} setAgenda={setAgenda} mode={step} onBack={() => setStep('landing')} onContinue={continueToTravel} onIcs={importIcs} busy={busy} error={error}/>;
   else if (step === 'travel') content = <TravelScreen journeys={journeys} setJourneys={setJourneys} maxExtra={maxExtra} setMaxExtra={setMaxExtra} onBack={() => setStep(agendaMode)} onAnalyze={runAnalysis} isDemo={isDemo}/>;
   else if (step === 'analysis') content = <AnalysisScreen error={error} onBack={() => setStep('travel')}/>;
-  else if (step === 'overview' && analysis) content = <OverviewScreen analysis={analysis} onChanges={() => setStep('changes')} onKeep={() => { setAnalysis(null); setAccepted(null); setIsDemo(false); setAgenda(blankAgenda()); setJourneys([]); setError(undefined); setTab('today'); setStep('landing'); }}/>;
-  else if (step === 'changes' && analysis) content = <ChangesScreen analysis={analysis} onBack={() => setStep('overview')} onWhy={openWhy} onFinal={() => setStep('final')}/>;
-  else if (step === 'final' && analysis) content = <FinalPlanScreen analysis={analysis} onBack={() => setStep('changes')} onAccept={acceptPlan} busy={busy} error={error}/>;
+  else if (step === 'overview' && analysis) content = <OverviewScreen analysis={analysis} onWhy={openWhy} onPlan={() => setStep('final')} onReset={resetDay}/>;
+  else if (step === 'final' && analysis) content = <FinalPlanScreen analysis={analysis} onBack={() => setStep('overview')} onAccept={acceptPlan} busy={busy} error={error}/>;
   else if (step === 'accepted' && accepted) content = <AcceptedScreen plan={accepted} onDone={() => { setTab('today'); setStep('overview'); }}/>;
   else content = <LandingScreen busy={busy} error={error} onImport={() => startAgenda('import')} onManual={() => startAgenda('manual')} onDemo={loadDemo}/>;
 
-  const showSplitRoute = Boolean(analysis && ['overview', 'final'].includes(step));
-  const mainContent = showSplitRoute && analysis
-    ? <div className="split-layout"><div className="split-left">{content}</div><div className="split-right"><DayRoutePanel analysis={analysis}/></div></div>
+  const useShell = Boolean(analysis && ['overview', 'final', 'accepted'].includes(step));
+  const mainContent = useShell
+    ? <AppShell active={tab} onChange={onNav}>{content}</AppShell>
     : content;
 
   return <>
-    {isDemo && !['landing', 'import'].includes(step) && <div className="demo-banner" role="status">Controlled demo data</div>}
+    {isDemo && ['travel', 'analysis'].includes(step) && <div className="demo-banner" role="status">Controlled demo data</div>}
     {mainContent}
-    {analysis && !['landing', 'import', 'manual', 'travel', 'analysis'].includes(step) && <BottomNav active={tab} onChange={onNav}/>}
-    {whyTrip && <Drawer title="Why this changed" onClose={() => setWhyTrip(null)}>
+    {whyTrip && <Drawer title="Why this change?" onClose={() => setWhyTrip(null)}>
       <div className="why-body">
         <div className="why-copy">{whyText}</div>
         <dl>
-          <div><dt>Current pollution</dt><dd>{whyTrip.original.pollutionExposure.toFixed(0)}</dd></div>
-          <div><dt>Recommended pollution</dt><dd>{whyTrip.recommended.pollutionExposure.toFixed(0)}</dd></div>
+          <div><dt>Current exposure</dt><dd>{whyTrip.original.pollutionExposure.toFixed(0)}</dd></div>
+          <div><dt>Recommended</dt><dd>{whyTrip.recommended.pollutionExposure.toFixed(0)}</dd></div>
           <div><dt>Travel change</dt><dd>{(whyTrip.recommended.travelMinutes - whyTrip.original.travelMinutes >= 0 ? '+' : '') + (whyTrip.recommended.travelMinutes - whyTrip.original.travelMinutes) + ' min'}</dd></div>
         </dl>
-        <div className="fine-print">Numbers come from the deterministic optimizer.</div>
+        <div className="fine-print">Verified optimizer values.</div>
       </div>
     </Drawer>}
   </>;
