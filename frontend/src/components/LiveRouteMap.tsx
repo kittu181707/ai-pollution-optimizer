@@ -180,7 +180,7 @@ export function LiveRouteMap({ trip, mapApiKey, region, mapStyle, onReady, onFai
         style: styleUrl(mapApiKey, region, mapStyle),
         center: first ? [first.lon, first.lat] : [77.209, 28.6139],
         zoom: first ? 12 : 10,
-        attributionControl: true,
+        attributionControl: { compact: true },
         validateStyle: false,
         cooperativeGestures: false,
         pitchWithRotate: false,
