@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 import { BottomNav, type NavTab } from './components/BottomNav';
+import { DayRoutePanel } from './components/DayRoutePanel';
 import { Drawer } from './components/Drawer';
 import { AcceptedScreen } from './screens/AcceptedScreen';
 import { AnalysisScreen } from './screens/AnalysisScreen';
@@ -207,9 +208,14 @@ export default function App() {
   else if (step === 'accepted' && accepted) content = <AcceptedScreen plan={accepted} onDone={() => { setTab('today'); setStep('overview'); }}/>;
   else content = <LandingScreen busy={busy} error={error} onImport={() => startAgenda('import')} onManual={() => startAgenda('manual')} onDemo={loadDemo}/>;
 
+  const showSplitRoute = Boolean(analysis && ['overview', 'final'].includes(step));
+  const mainContent = showSplitRoute && analysis
+    ? <div className="split-layout"><div className="split-left">{content}</div><div className="split-right"><DayRoutePanel analysis={analysis}/></div></div>
+    : content;
+
   return <>
     {isDemo && !['landing', 'import'].includes(step) && <div className="demo-banner" role="status">Controlled demo data</div>}
-    {content}
+    {mainContent}
     {analysis && !['landing', 'import', 'manual', 'travel', 'analysis'].includes(step) && <BottomNav active={tab} onChange={onNav}/>}
     {whyTrip && <Drawer title="Why this changed" onClose={() => setWhyTrip(null)}>
       <div className="why-body">

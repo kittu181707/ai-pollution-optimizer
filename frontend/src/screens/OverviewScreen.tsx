@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarCheck, Check, Clock3, Sun, ThermometerSun } from 'lucide-react';
+import { ArrowDown, ArrowRight, CalendarCheck, Clock3, Sun, ThermometerSun } from 'lucide-react';
 import type { DayAnalysis } from '../types';
 import { Brand } from '../components/Brand';
 
@@ -12,30 +12,62 @@ export function OverviewScreen({ analysis, onChanges, onKeep }: { analysis: DayA
   const metrics = analysis.metrics;
   const uvReduction = percentDown(metrics.originalHighUvMinutes, metrics.optimizedHighUvMinutes);
   const heatReduction = percentDown(metrics.originalHeatRiskMinutes, metrics.optimizedHeatRiskMinutes);
+
   return <div className="screen wide result-screen">
-    <div className="result-top"><Brand/><div className="status-pill"><Check size={15}/>Appointments kept</div></div>
-    <section className="result-hero">
-      <div className="eyebrow">TODAY</div>
-      <div className="result-primary"><strong>−{metrics.pollutionReductionPct}%</strong><span>modeled pollution exposure</span></div>
-      <div className="score-shift" aria-label="Pollution exposure index change"><span>100</span><ArrowRight size={17}/><strong>{metrics.optimizedExposureIndex}</strong></div>
-    </section>
-    <div className="metric-strip">
-      <div><CalendarCheck size={18}/><span>Appointments</span><strong>{metrics.appointmentsChanged === 0 ? 'No changes' : metrics.appointmentsChanged}</strong></div>
-      <div><Clock3 size={18}/><span>Extra travel</span><strong>{'+' + metrics.extraTravelMinutes + ' min'}</strong></div>
-      <div><Sun size={18}/><span>High UV</span><strong>{uvReduction ? '−' + uvReduction + '%' : 'No increase'}</strong></div>
-      <div><ThermometerSun size={18}/><span>Heat exposure</span><strong>{heatReduction ? '−' + heatReduction + '%' : 'No increase'}</strong></div>
+    <div className="result-top">
+      <Brand/>
+      <div className="status-pill"><CalendarCheck size={15}/>Appointments kept</div>
     </div>
-    {analysis.changes.length > 0 ? <button className="primary cta result-cta" onClick={onChanges}>
-      {'Review ' + analysis.changes.length + ' change' + (analysis.changes.length === 1 ? '' : 's')}<ArrowRight size={18}/>
-    </button> : <div className="no-change-card"><Check size={20}/><div><strong>Your current day is already the best feasible plan.</strong><span>No useful pollution reduction cleared the threshold.</span></div></div>}
-    <button className="quiet-action" onClick={onKeep}>{analysis.changes.length ? 'Keep current day' : 'Start over'}</button>
-    <details className="tech-details">
-      <summary>AWS analysis details</summary>
+
+    <div className="screen-title result-title">
+      <div className="eyebrow">WHOLE DAY OPTIMIZED</div>
+      <h1>Less exposure. Same day.</h1>
+      <div className="screen-hint">{analysis.changes.length ? analysis.changes.length + ' focused change' + (analysis.changes.length === 1 ? '' : 's') : 'No useful change needed'}</div>
+    </div>
+
+    <section className="exposure-hero" aria-label="Modeled pollution exposure index">
+      <div className="exposure-side">
+        <span>Original</span>
+        <strong>100</strong>
+      </div>
+      <ArrowRight className="exposure-arrow" size={24}/>
+      <div className="exposure-side optimized">
+        <span>Optimized</span>
+        <strong>{metrics.optimizedExposureIndex}</strong>
+      </div>
+      <div className="exposure-delta"><ArrowDown size={15}/>{metrics.pollutionReductionPct}% <small>modeled pollution</small></div>
+    </section>
+
+    <div className="metric-grid">
+      <div><CalendarCheck size={19}/><span>Appointments</span><strong>{metrics.appointmentsChanged === 0 ? 'No changes' : metrics.appointmentsChanged}</strong></div>
+      <div><Clock3 size={19}/><span>Extra travel</span><strong>{'+' + metrics.extraTravelMinutes + ' min'}</strong></div>
+      <div><Sun size={19}/><span>High UV</span><strong>{uvReduction ? '−' + uvReduction + '%' : 'No increase'}</strong></div>
+      <div><ThermometerSun size={19}/><span>Heat exposure</span><strong>{heatReduction ? '−' + heatReduction + '%' : 'No increase'}</strong></div>
+    </div>
+
+    <section className="aws-proof">
+      <div>
+        <div className="eyebrow">AWS OPTIMIZATION</div>
+        <h3>Whole-day route search completed</h3>
+        <p>Route candidates and environmental samples were ranked under your appointment and time constraints.</p>
+      </div>
       <dl>
-        <div><dt>Routes checked</dt><dd>{count(analysis.workflow.routesEvaluated)}</dd></div>
-        <div><dt>Plans considered</dt><dd>{count(analysis.workflow.dayPlansTested)}</dd></div>
-        <div><dt>Environmental samples</dt><dd>{count(analysis.workflow.environmentalSamples)}</dd></div>
+        <div><dt>Routes</dt><dd>{count(analysis.workflow.routesEvaluated)}</dd></div>
+        <div><dt>Plans</dt><dd>{count(analysis.workflow.dayPlansTested)}</dd></div>
+        <div><dt>Samples</dt><dd>{count(analysis.workflow.environmentalSamples)}</dd></div>
       </dl>
+    </section>
+
+    {analysis.changes.length > 0 ? <div className="result-actions">
+      <button className="primary cta" onClick={onChanges}>See what changed<ArrowRight size={18}/></button>
+      <button className="secondary" onClick={onKeep}>Keep current day</button>
+    </div> : <>
+      <div className="no-change-card"><CalendarCheck size={20}/><div><strong>Your current day is already the best feasible plan.</strong><span>No useful pollution reduction cleared the threshold.</span></div></div>
+      <button className="quiet-action" onClick={onKeep}>Start over</button>
+    </>}
+
+    <details className="tech-details">
+      <summary>Data sources</summary>
       <div className="source-line">{analysis.workflow.routeSource}</div>
       <div className="source-line">{analysis.workflow.environmentSource}</div>
     </details>

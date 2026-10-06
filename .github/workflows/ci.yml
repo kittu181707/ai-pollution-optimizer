@@ -28,5 +28,7 @@ jobs:
           cd frontend
           npm install
           npm audit --audit-level=high
+          npm run test:ui
           npm run typecheck
           npm run build
+          test -z "$(git ls-files '*.tsbuildinfo')"
