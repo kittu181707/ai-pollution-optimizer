@@ -299,6 +299,38 @@ Resources:
             Method: get
 
 
+
+  RuntimeConfigFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/runtime-config.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/runtime-config.handler
+      Timeout: 10
+      Environment:
+        Variables:
+          MAP_API_KEY_NAME: !Ref LiveMapApiKey
+          AMAZON_LOCATION_MAP_STYLE: Standard
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - geo:DescribeKey
+              Resource: !GetAtt LiveMapApiKey.KeyArn
+      Events:
+        RuntimeConfig:
+          Type: Api
+          Properties:
+            Path: /api/config
+            Method: get
+
   EnvironmentCurrentFunction:
     Type: AWS::Serverless::Function
     Metadata:
