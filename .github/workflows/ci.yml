@@ -6,22 +6,96 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ap-south-1
+      AWS_DEFAULT_REGION: ap-south-1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - uses: aws-actions/setup-sam@v2
+
+      - name: Root workspace
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=high
+          node -e "const root=require('./package.json'); const backend=require('./backend/package.json'); if(!backend.scripts?.dev || !root.scripts?.dev?.includes('npm run dev --prefix backend')) process.exit(1)"
+
       - name: Backend
         run: |
           cd backend
-          npm install
+          npm ci
           npm audit --audit-level=high
           npm run typecheck
           npm test
+
+      - name: Local API smoke
+        run: |
+          cd backend
+          npm run dev > /tmp/project-backend.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          node --input-type=module <<'NODE'
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          let demo;
+          for (let attempt = 0; attempt < 30; attempt += 1) {
+            try {
+              const response = await fetch('http://127.0.0.1:3001/api/demo/day');
+              if (response.ok) { demo = await response.json(); break; }
+            } catch {}
+            await sleep(250);
+          }
+          if (!demo) throw new Error('local backend did not start');
+          const journeys = [
+            { tripId:'d1', origin:'Home, Delhi', destination:'Delhi Technological University', departureTime:'07:45', arriveBy:'08:30', mode:'car' },
+            { tripId:'d2', origin:'Delhi Technological University', destination:'Connaught Place', departureTime:'12:15', arriveBy:'13:00', mode:'metro' },
+            { tripId:'d3', origin:'Connaught Place', destination:'Gym, Delhi', departureTime:'17:45', arriveBy:'18:30', mode:'metro' },
+            { tripId:'d4', origin:'Gym, Delhi', destination:'Home, Delhi', departureTime:'19:20', arriveBy:'20:00', mode:'bike' },
+          ];
+          const analyze = await fetch('http://127.0.0.1:3001/api/day/analyze', {
+            method:'POST',
+            headers:{'content-type':'application/json'},
+            body:JSON.stringify({...demo,userId:'ci-smoke',journeys,maxExtraMinutes:10,demoMode:true})
+          });
+          if (!analyze.ok) throw new Error('analysis HTTP smoke failed: ' + await analyze.text());
+          const plan = await analyze.json();
+          if (plan.metrics.extraTravelMinutes !== 7 || plan.metrics.appointmentsChanged !== 0) throw new Error('demo invariants changed');
+          if (plan.changes.length !== 1 || plan.changes[0].tripId !== 'd3') throw new Error('demo must have one dominant change');
+          if (plan.workflow.dataMode !== 'demo') throw new Error('demo provenance missing');
+
+          const accept = await fetch('http://127.0.0.1:3001/api/plan/accept', {
+            method:'POST',
+            headers:{'content-type':'application/json'},
+            body:JSON.stringify({userId:'ci-smoke',planId:plan.planId})
+          });
+          if (!accept.ok) throw new Error('accept HTTP smoke failed');
+
+          const history = await fetch('http://127.0.0.1:3001/api/history?userId=ci-smoke').then((response) => response.json());
+          if (history.plans?.length !== 1) throw new Error('accepted plan missing from history');
+
+          const map = await fetch('http://127.0.0.1:3001/api/map/static', {
+            method:'POST',
+            headers:{'content-type':'application/json'},
+            body:JSON.stringify({planId:plan.planId,tripId:'d3',change:plan.changes[0]})
+          });
+          if (!map.ok) throw new Error('map HTTP smoke failed');
+          console.log('local API demo → analyze → accept → history → map smoke passed');
+          NODE
+
+      - name: AWS SAM deployability
+        run: |
+          npm install --global esbuild@0.24.2
+          sam validate
+          sam build --parallel
+          test -n "$(find .aws-sam/build -type f -name '*.js' -print -quit)"
+
       - name: Frontend
         run: |
           cd frontend
           npm install
           npm audit --audit-level=high
+          npm run test:ui
           npm run typecheck
           npm run build
+          test -z "$(git ls-files '*.tsbuildinfo')"

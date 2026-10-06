@@ -1,24 +1,26 @@
-import { Check, LoaderCircle } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Cloud, Route, ShieldCheck } from 'lucide-react';
+import { FlowHeader } from '../components/FlowHeader';
 
 export function AnalysisScreen({ error, onBack }: { error?: string; onBack: () => void }) {
-  const steps = ['Agenda received', 'Journeys validated', 'Route alternatives requested', 'Pollution + weather timeline checked', 'Constraints applied'];
-  const [currentStep, setCurrentStep] = useState(0);
-
-  useEffect(() => {
-    if (error) return;
-    const interval = setInterval(() => {
-      setCurrentStep(s => Math.min(s + 1, steps.length));
-    }, 1200);
-    return () => clearInterval(interval);
-  }, [error, steps.length]);
-
-  return <div className="screen narrow analysis-screen"><p className="eyebrow">AI OPTIMIZATION</p><h1>Analyzing your day</h1>
-    {!error ? <div className="progress-card">
-      {steps.map((step, index) => index < currentStep ? <div className="progress-row" key={step}><Check/> <span>{step}</span></div> : null)}
-      {currentStep < steps.length && !error ? <div className="progress-row active"><LoaderCircle className="spin"/><strong>{steps[currentStep]}…</strong></div> : null}
-      {currentStep >= steps.length && !error ? <div className="progress-row active"><LoaderCircle className="spin"/><strong>Finding the best whole-day plan…</strong></div> : null}
-    </div> : <div className="error-banner"><strong>Analysis stopped.</strong><br/>{error}<div><button className="secondary" onClick={onBack}>Return to travel setup</button></div></div>}
-    <p className="fine-print">Processing environmental data and optimizing routes...</p>
+  return <div className="screen narrow">
+    <FlowHeader step={3} onBack={error ? onBack : undefined}/>
+    <div className="analysis-screen">
+      {!error ? <>
+        <div className="analysis-mark" aria-hidden="true"><span/><span/><span/></div>
+        <div className="eyebrow">CHECKING YOUR DAY</div>
+        <h1>Finding the smallest useful changes</h1>
+        <div className="analysis-tags">
+          <span><Route size={16}/>Routes</span>
+          <span><Cloud size={16}/>Environment</span>
+          <span><ShieldCheck size={16}/>Constraints</span>
+        </div>
+        <div className="fine-print">AWS-backed analysis · no client-side scoring</div>
+      </> : <div className="analysis-error">
+        <div className="error-symbol">!</div>
+        <h1>Couldn’t finish the analysis</h1>
+        <div className="error-banner" role="alert">{error}</div>
+        <button className="secondary" onClick={onBack}>Review travel setup</button>
+      </div>}
+    </div>
   </div>;
 }

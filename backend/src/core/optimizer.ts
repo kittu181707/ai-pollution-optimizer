@@ -8,38 +8,56 @@ export interface OptimizeSetsInput {
   maxExtraMinutes: number;
   environmentSource: string;
   routeSource: string;
+  dataMode?: 'demo' | 'live';
 }
 
 type State = {
-  score: number;
+  pollution: number;
+  secondaryEnvironment: number;
+  inconvenience: number;
   selected: RouteCandidate[];
   combinations: bigint;
 };
 
 export function optimizeCandidateSets(input: OptimizeSetsInput): DayAnalysis {
   if (!input.sets.length) throw new Error('No journeys to optimize');
+
   const originals = input.sets.map((set) => set.original);
-  const originalRaw = sum(originals, 'modeledExposure');
+  const originalPollution = sum(originals, 'pollutionExposure');
+  const originalModeled = sum(originals, 'modeledExposure');
 
   let states = new Map<number, State>();
-  states.set(0, { score: 0, selected: [], combinations: 1n });
+  states.set(0, {
+    pollution: 0,
+    secondaryEnvironment: 0,
+    inconvenience: 0,
+    selected: [],
+    combinations: 1n,
+  });
 
-  for (let index = 0; index < input.sets.length; index += 1) {
-    const set = input.sets[index];
+  for (const set of input.sets) {
     if (!set.candidates.length) throw new Error(`No candidates for ${set.journey.origin} → ${set.journey.destination}`);
     const next = new Map<number, State>();
 
     for (const [extraSoFar, state] of states.entries()) {
       for (const candidate of set.candidates) {
-        const extra = extraSoFar + Math.max(0, candidate.travelMinutes - set.original.travelMinutes);
+        const candidateExtra = Math.max(0, candidate.travelMinutes - set.original.travelMinutes);
+        const extra = extraSoFar + candidateExtra;
         if (extra > input.maxExtraMinutes) continue;
 
-        const score = state.score + candidateScore(candidate, set.original);
+        const candidateChange = candidate.candidateId === set.original.candidateId ? 0 : 1;
+        const proposed: State = {
+          pollution: state.pollution + candidate.pollutionExposure,
+          secondaryEnvironment: state.secondaryEnvironment + Math.max(0, candidate.modeledExposure - candidate.pollutionExposure),
+          inconvenience: state.inconvenience + candidateExtra + Math.abs(candidate.shiftMinutes) * .1 + candidateChange * 2,
+          selected: [...state.selected, candidate],
+          combinations: state.combinations,
+        };
+
         const existing = next.get(extra);
         const combinations = (existing?.combinations || 0n) + state.combinations;
-
-        if (!existing || score < existing.score) {
-          next.set(extra, { score, selected: [...state.selected, candidate], combinations });
+        if (!existing || isBetter(proposed, existing)) {
+          next.set(extra, { ...proposed, combinations });
         } else {
           next.set(extra, { ...existing, combinations });
         }
@@ -52,20 +70,23 @@ export function optimizeCandidateSets(input: OptimizeSetsInput): DayAnalysis {
 
   let best: State | undefined;
   for (const state of states.values()) {
-    if (!best || state.score < best.score) best = state;
+    if (!best || isBetter(state, best)) best = state;
   }
   if (!best) throw new Error('No feasible plan');
 
   let selected = best.selected;
-  let optimizedRaw = sum(selected, 'modeledExposure');
+  let optimizedPollution = sum(selected, 'pollutionExposure');
 
-  // Avoid noisy recommendations that barely move the primary metric.
-  if (originalRaw > 0 && (originalRaw - optimizedRaw) / originalRaw < 0.01) {
+  // Avoid disruptive recommendations for a negligible primary-metric gain.
+  if (originalPollution > 0 && (originalPollution - optimizedPollution) / originalPollution < .01) {
     selected = originals;
-    optimizedRaw = originalRaw;
+    optimizedPollution = originalPollution;
   }
 
-  const optimizedIndex = originalRaw > 0 ? Math.round((optimizedRaw / originalRaw) * 100) : 100;
+  const optimizedModeled = sum(selected, 'modeledExposure');
+  const pollutionIndex = originalPollution > 0 ? Math.round((optimizedPollution / originalPollution) * 100) : 100;
+  const pollutionReductionPct = Math.max(0, 100 - pollutionIndex);
+
   const trips = input.sets.map((set, index) => {
     const recommended = selected[index];
     const changed = recommended.candidateId !== set.original.candidateId;
@@ -98,10 +119,13 @@ export function optimizeCandidateSets(input: OptimizeSetsInput): DayAnalysis {
     changes: trips.filter((trip) => trip.changed),
     metrics: {
       originalExposureIndex: 100,
-      optimizedExposureIndex: optimizedIndex,
-      exposureReductionPct: Math.max(0, 100 - optimizedIndex),
-      originalRawExposure: round(originalRaw),
-      optimizedRawExposure: round(optimizedRaw),
+      optimizedExposureIndex: pollutionIndex,
+      exposureReductionPct: pollutionReductionPct,
+      originalRawExposure: round(originalModeled),
+      optimizedRawExposure: round(optimizedModeled),
+      originalPollutionExposure: round(originalPollution),
+      optimizedPollutionExposure: round(optimizedPollution),
+      pollutionReductionPct,
       extraTravelMinutes,
       appointmentsChanged: 0,
       originalHighUvMinutes: round(sum(originals, 'highUvOutdoorMinutes')),
@@ -116,31 +140,34 @@ export function optimizeCandidateSets(input: OptimizeSetsInput): DayAnalysis {
       feasiblePlans: safeBigInt(feasibleCombinations),
       environmentSource: input.environmentSource,
       routeSource: input.routeSource,
+      environmentalSamples: selected.reduce((total, candidate) => total + candidate.environmentSamples.length, 0),
+      dataMode: input.dataMode || 'live',
+      analysisDurationMs: 0,
     },
   };
 }
 
-function candidateScore(candidate: RouteCandidate, original: RouteCandidate) {
-  const extra = Math.max(0, candidate.travelMinutes - original.travelMinutes);
-  const heatUv = candidate.highUvOutdoorMinutes + candidate.heatRiskOutdoorMinutes;
-  const timeShift = Math.abs(candidate.shiftMinutes);
-  const changePenalty = candidate.candidateId === original.candidateId ? 0 : 2;
-  return candidate.modeledExposure * 1000 + heatUv * 10 + extra + timeShift * 0.1 + changePenalty;
+function isBetter(a: State, b: State) {
+  if (Math.abs(a.pollution - b.pollution) > .01) return a.pollution < b.pollution;
+  if (Math.abs(a.secondaryEnvironment - b.secondaryEnvironment) > .01) return a.secondaryEnvironment < b.secondaryEnvironment;
+  return a.inconvenience < b.inconvenience;
 }
 
 function explain(original: RouteCandidate, recommended: RouteCandidate, origin: string, destination: string) {
   if (original.candidateId === recommended.candidateId) {
     return `No change needed for ${origin} to ${destination}; the current trip is the best feasible choice.`;
   }
-  const pct = original.modeledExposure > 0
-    ? Math.max(0, Math.round((1 - recommended.modeledExposure / original.modeledExposure) * 100))
+  const pct = original.pollutionExposure > 0
+    ? Math.max(0, Math.round((1 - recommended.pollutionExposure / original.pollutionExposure) * 100))
     : 0;
   const delta = recommended.travelMinutes - original.travelMinutes;
   const parts = [
-    `${pct}% lower modeled exposure`,
+    `${pct}% lower modeled pollution exposure`,
     `${delta >= 0 ? '+' : ''}${delta} travel min`,
   ];
-  if (recommended.shiftMinutes) parts.push(`${recommended.shiftMinutes > 0 ? '+' : ''}${recommended.shiftMinutes} min departure shift`);
+  if (recommended.shiftMinutes) {
+    parts.push(`${recommended.shiftMinutes > 0 ? '+' : ''}${recommended.shiftMinutes} min departure shift`);
+  }
   return `${recommended.label}: ${parts.join(' · ')}.`;
 }
 

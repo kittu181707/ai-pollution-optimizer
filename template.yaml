@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: AI Personal Pollution Optimizer whole-day environmental exposure optimizer
+Description: PROJECT_NAME whole-day environmental exposure optimizer
 
 Parameters:
   DemoMode:
@@ -52,18 +52,39 @@ Resources:
         AttributeName: expiresAt
         Enabled: true
 
+  WorkflowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+
   PrepareFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/prepare.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/prepare.handler
 
   OptimizeFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/optimize.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/optimize.handler
-      Timeout: 60
+      Timeout: 90
       MemorySize: 768
       Policies:
         - Statement:
@@ -75,6 +96,14 @@ Resources:
 
   PersistFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/persist.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/persist.handler
@@ -86,6 +115,12 @@ Resources:
     Type: AWS::Serverless::StateMachine
     Properties:
       Type: EXPRESS
+      Logging:
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt WorkflowLogGroup.Arn
+        IncludeExecutionData: true
+        Level: ALL
       Definition:
         StartAt: Prepare
         States:
@@ -108,9 +143,29 @@ Resources:
             FunctionName: !Ref OptimizeFunction
         - LambdaInvokePolicy:
             FunctionName: !Ref PersistFunction
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogDelivery
+                - logs:GetLogDelivery
+                - logs:UpdateLogDelivery
+                - logs:DeleteLogDelivery
+                - logs:ListLogDeliveries
+                - logs:PutResourcePolicy
+                - logs:DescribeResourcePolicies
+                - logs:DescribeLogGroups
+              Resource: '*'
 
   AnalyzeApiFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/analyze-api.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/analyze-api.handler
@@ -132,6 +187,14 @@ Resources:
 
   IcsFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/ics.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/ics.handler
@@ -144,6 +207,14 @@ Resources:
 
   DemoFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/demo.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/demo.handler
@@ -156,6 +227,14 @@ Resources:
 
   AcceptFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/accept.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/accept.handler
@@ -171,6 +250,14 @@ Resources:
 
   HistoryFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/history.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/history.handler
@@ -184,8 +271,46 @@ Resources:
             Path: /api/history
             Method: get
 
+  MapFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/map.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/map.handler
+      Timeout: 15
+      MemorySize: 768
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PlansTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - geo-maps:GetStaticMap
+              Resource: '*'
+      Events:
+        StaticMap:
+          Type: Api
+          Properties:
+            Path: /api/map/static
+            Method: post
+
   ExplainFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/explain.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/explain.handler

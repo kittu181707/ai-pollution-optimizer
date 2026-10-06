@@ -1,30 +1,45 @@
 import { strict as assert } from 'node:assert';
 import { handler as prepare } from '../handlers/prepare';
 import { parseIcs } from '../core/ics';
-import { isValidTime, timeToMinutes } from '../core/time';
+import { isValidTime, timeToMinutes, availableMinutes } from '../core/time';
 import { optimizeCandidateSets } from '../core/optimizer';
-import type { RouteCandidate, TripCandidateSet } from '../types';
+import { demoDay } from '../core/demo';
+import { ALT_MODE_ORDER, TIME_SHIFT_OPTIONS, runDirectAnalysis } from '../services/analyze';
+import { routesForTrip } from '../services/routes';
+import type { EnvironmentSnapshot, RouteCandidate, TripCandidateSet } from '../types';
 
-const env = { pm25: 90, pm10: 130, aqi: 120, temperature: 33, uvIndex: 7, rainProbability: 10, source: 'stress' };
+const env: EnvironmentSnapshot = {
+  pm25: 90,
+  pm10: 130,
+  aqi: 120,
+  temperature: 33,
+  humidity: 45,
+  windSpeed: 7,
+  uvIndex: 7,
+  rainProbability: 10,
+  source: 'stress',
+};
 
 function candidate(trip: number, option: number): RouteCandidate {
   const original = option === 0;
   return {
-    candidateId: `t${trip}-o${option}`,
-    routeId: `r${trip}-o${option}`,
-    tripId: `t${trip}`,
+    candidateId: 't' + trip + '-o' + option,
+    routeId: 'r' + trip + '-o' + option,
+    tripId: 't' + trip,
     mode: option % 2 ? 'metro' : 'car',
-    label: `Option ${option}`,
+    label: 'Option ' + option,
     departureTime: '08:00',
     shiftMinutes: option === 4 ? 10 : 0,
     travelMinutes: 20 + option,
     distanceKm: 8 + option,
-    modeledExposure: 100 - option * 8 - trip * 0.1,
+    modeledExposure: 100 - option * 8 - trip * .1,
     pollutionExposure: 90 - option * 6,
+    weatherPenalty: 10,
     highUvOutdoorMinutes: option % 2 ? 3 : 1,
     heatRiskOutdoorMinutes: option % 2 ? 3 : 1,
-    estimatedCo2eKg: original ? 1.2 : 0.5,
+    estimatedCo2eKg: original ? 1.2 : .5,
     environment: env,
+    environmentSamples: [{ position: { lat: 0, lon: 0 }, minutes: 20 + option, environment: env }],
     geometry: [],
     source: 'stress',
   };
@@ -32,7 +47,7 @@ function candidate(trip: number, option: number): RouteCandidate {
 
 async function main() {
   const manySets: TripCandidateSet[] = Array.from({ length: 30 }, (_, trip) => ({
-    journey: { tripId: `t${trip}`, origin: `O${trip}`, destination: `D${trip}`, departureTime: '08:00', mode: 'car' },
+    journey: { tripId: 't' + trip, origin: 'O' + trip, destination: 'D' + trip, departureTime: '08:00', mode: 'car' },
     original: candidate(trip, 0),
     candidates: Array.from({ length: 5 }, (_, option) => candidate(trip, option)),
   }));
@@ -51,6 +66,9 @@ async function main() {
   assert(stress.metrics.extraTravelMinutes <= 30);
   assert(stress.trips.every((trip) => trip.recommended));
   assert.equal(stress.workflow.dayPlansTested, Number.MAX_SAFE_INTEGER);
+
+  assert.deepEqual(TIME_SHIFT_OPTIONS, [-10, -5, 0, 5, 10]);
+  assert.deepEqual(ALT_MODE_ORDER, ['metro', 'bus', 'car', 'bike', 'walk']);
 
   assert.equal(isValidTime('23:59'), true);
   assert.equal(isValidTime('24:00'), false);
@@ -76,6 +94,21 @@ async function main() {
     assert.equal(ics.events.length, 1);
     assert.equal(ics.events[0].title, 'Meeting');
   }
+
+  const localDateToken = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10).replace(/-/g, '');
+  const zonedIcs = parseIcs([
+    'BEGIN:VCALENDAR',
+    'BEGIN:VEVENT',
+    'UID:zoned',
+    'DTSTART;TZID=Asia/Kolkata:' + localDateToken + 'T090000',
+    'DTEND;TZID=Asia/Kolkata:' + localDateToken + 'T100000',
+    'SUMMARY:Zoned meeting',
+    'LOCATION:Office',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n'));
+  assert.equal(zonedIcs.events[0]?.start, '09:00');
+  assert.equal(zonedIcs.events[0]?.end, '10:00');
 
   await assert.rejects(
     () => prepare({
@@ -104,7 +137,66 @@ async function main() {
     /does not match/,
   );
 
-  console.log('stress and validation tests passed');
+  await assert.rejects(
+    () => routesForTrip({
+      origin: { lat: 28.6, lon: 77.2 },
+      destination: { lat: 28.7, lon: 77.3 },
+      mode: 'bike',
+      date: '2026-10-06',
+      departureTime: '08:00',
+      demoMode: false,
+      tripOrdinal: 0,
+    }),
+    /Bike routing is unavailable/,
+  );
+
+  const day = demoDay();
+  const demoRequest = {
+    ...day,
+    userId: 'e2e-user',
+    maxExtraMinutes: 10,
+    demoMode: true,
+    journeys: [
+      { tripId: 'd1', origin: 'Home, Delhi', destination: 'Delhi Technological University', departureTime: '07:45', arriveBy: '08:30', mode: 'car' as const },
+      { tripId: 'd2', origin: 'Delhi Technological University', destination: 'Connaught Place', departureTime: '12:15', arriveBy: '13:00', mode: 'metro' as const },
+      { tripId: 'd3', origin: 'Connaught Place', destination: 'Gym, Delhi', departureTime: '17:45', arriveBy: '18:30', mode: 'metro' as const },
+      { tripId: 'd4', origin: 'Gym, Delhi', destination: 'Home, Delhi', departureTime: '19:20', arriveBy: '20:00', mode: 'bike' as const },
+    ],
+  };
+
+  const preparedDemo = await prepare(demoRequest);
+  const demoStarted = Date.now();
+  const endToEnd = await runDirectAnalysis(preparedDemo);
+  assert(Date.now() - demoStarted < 5000, 'controlled demo analysis should complete quickly');
+  assert.equal(endToEnd.trips.length, 4);
+  assert.equal(endToEnd.metrics.appointmentsChanged, 0);
+  assert.equal(endToEnd.metrics.extraTravelMinutes, 7);
+  assert(endToEnd.metrics.pollutionReductionPct >= 30 && endToEnd.metrics.pollutionReductionPct <= 40);
+  assert.deepEqual(endToEnd.changes.map((trip) => trip.tripId), ['d3']);
+  assert.equal(endToEnd.changes[0].recommended.mode, 'bus');
+  assert.equal(endToEnd.changes[0].recommended.travelMinutes - endToEnd.changes[0].original.travelMinutes, 7);
+
+  const midday = endToEnd.trips.find((trip) => trip.tripId === 'd2');
+  assert(midday);
+  assert.equal(midday.changed, false, 'sub-2% pollution gain with extra travel should be suppressed');
+
+  assert(endToEnd.workflow.routeSource.includes('Controlled demo route data'));
+  assert(endToEnd.workflow.environmentSource.includes('Controlled demo environmental data'));
+  assert.equal(endToEnd.workflow.dataMode, 'demo');
+  assert(endToEnd.workflow.analysisDurationMs >= 0);
+  assert(endToEnd.workflow.environmentalSamples >= 12);
+
+  endToEnd.trips.forEach((trip, index) => {
+    const arriveBy = demoRequest.journeys[index].arriveBy;
+    assert(trip.recommended.travelMinutes <= availableMinutes(trip.recommended.departureTime, arriveBy));
+    assert(trip.candidatesEvaluated > 0);
+    assert.equal(trip.recommended.environmentSamples.length, 3);
+    assert(Number.isFinite(trip.recommended.environment.humidity));
+    assert(Number.isFinite(trip.recommended.environment.windSpeed));
+  });
+
+  console.log('demo metrics', JSON.stringify(endToEnd.metrics));
+  console.log('stress, feasibility, timezone, candidate-generation and demo tests passed');
 }
 
 void main();

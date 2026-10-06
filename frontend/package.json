@@ -1,5 +1,5 @@
 {
-  "name": "ai-pollution-optimizer-frontend",
+  "name": "project-name-frontend",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,17 +7,15 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:ui": "node scripts/ui-contract.mjs"
   },
   "dependencies": {
-    "leaflet": "^1.9.4",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-leaflet": "^5.0.0"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@types/leaflet": "^1.9.22",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
