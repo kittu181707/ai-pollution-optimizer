@@ -56,6 +56,7 @@ app.get('/api/history', (req, res) => {
   return res.json({ plans: memory.get(`history:${userId}`) || [] });
 });
 
-app.post('/api/map/static', (_req, res) => res.json({ imageDataUrl: null, source: 'Local geometry preview' }));\napp.post('/api/explain', async (req, res) => send(res, await explain(event(req))));
+app.post('/api/map/static', (_req, res) => res.json({ imageDataUrl: null, source: 'Local geometry preview' }));
+app.post('/api/explain', async (req, res) => send(res, await explain(event(req))));
 
 app.listen(3001, () => console.log('Local backend on http://localhost:3001'));
