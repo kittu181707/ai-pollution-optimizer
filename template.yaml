@@ -10,6 +10,10 @@ Parameters:
   BedrockModelId:
     Type: String
     Default: ''
+  TomorrowIoApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
   AppTimezoneOffset:
     Type: String
     Default: '+05:30'
@@ -86,6 +90,9 @@ Resources:
       Handler: src/handlers/optimize.handler
       Timeout: 90
       MemorySize: 768
+      Environment:
+        Variables:
+          TOMORROW_IO_API_KEY: !Ref TomorrowIoApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -270,6 +277,31 @@ Resources:
           Properties:
             Path: /api/history
             Method: get
+
+
+  EnvironmentCurrentFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/environment-current.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/environment-current.handler
+      Timeout: 15
+      Environment:
+        Variables:
+          TOMORROW_IO_API_KEY: !Ref TomorrowIoApiKey
+      Events:
+        CurrentEnvironment:
+          Type: Api
+          Properties:
+            Path: /api/environment/current
+            Method: post
 
   MapFunction:
     Type: AWS::Serverless::Function
