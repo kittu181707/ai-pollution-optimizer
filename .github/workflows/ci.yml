@@ -15,11 +15,13 @@ jobs:
         run: |
           cd backend
           npm install
+          npm audit --audit-level=high
           npm run typecheck
           npm test
       - name: Frontend
         run: |
           cd frontend
           npm install
+          npm audit --audit-level=high
           npm run typecheck
           npm run build

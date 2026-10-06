@@ -1,21 +1,34 @@
 import { API_BASE_URL } from './config';
-import type { AcceptedPlan, AgendaPayload, AnalyzeDayRequest, DayAnalysis } from './types';
+import type { AcceptedPlan, AgendaPayload, AnalyzeDayRequest, DayAnalysis, TripAnalysis } from './types';
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.message || `Request failed (${response.status})`);
-  return body as T;
+async function request<T>(path: string, init?: RequestInit, timeoutMs = 15_000): Promise<T> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.message || `Request failed (${response.status})`);
+    return payload as T;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw new Error('Request timed out. Try again.');
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export const api = {
   getDemoDay: () => request<AgendaPayload>('/api/demo/day'),
-  parseIcs: (icsText: string) => request<AgendaPayload>('/api/ics/parse', { method: 'POST', body: JSON.stringify({ icsText }) }),
-  analyzeDay: (payload: AnalyzeDayRequest) => request<DayAnalysis>('/api/day/analyze', { method: 'POST', body: JSON.stringify(payload) }),
+  parseIcs: (icsText: string) => request<AgendaPayload>('/api/ics/parse', { method: 'POST', body: JSON.stringify({ icsText }) }, 20_000),
+  analyzeDay: (payload: AnalyzeDayRequest) => request<DayAnalysis>('/api/day/analyze', { method: 'POST', body: JSON.stringify(payload) }, 75_000),
   acceptPlan: (userId: string, planId: string) => request<AcceptedPlan>('/api/plan/accept', { method: 'POST', body: JSON.stringify({ userId, planId }) }),
   history: (userId: string) => request<{ plans: AcceptedPlan[] }>(`/api/history?userId=${encodeURIComponent(userId)}`),
-  explain: (change: unknown) => request<{ explanation: string; source: string }>('/api/explain', { method: 'POST', body: JSON.stringify({ change }) }),
+  explain: (planId: string, trip: TripAnalysis) => request<{ explanation: string; source: string }>('/api/explain', {
+    method: 'POST',
+    body: JSON.stringify({ planId, tripId: trip.tripId, change: trip }),
+  }),
 };

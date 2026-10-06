@@ -10,6 +10,10 @@ Parameters:
   BedrockModelId:
     Type: String
     Default: ''
+  AppTimezoneOffset:
+    Type: String
+    Default: '+05:30'
+    AllowedPattern: '^(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])$'
 
 Globals:
   Function:
@@ -22,7 +26,7 @@ Globals:
         TABLE_NAME: !Ref PlansTable
         DEMO_MODE: !Ref DemoMode
         BEDROCK_MODEL_ID: !Ref BedrockModelId
-        GEOCODER_USER_AGENT: 'PROJECT_NAME/0.1'
+        APP_TIMEZONE_OFFSET: !Ref AppTimezoneOffset
   Api:
     Cors:
       AllowMethods: "'GET,POST,OPTIONS'"
@@ -44,6 +48,9 @@ Resources:
           KeyType: HASH
         - AttributeName: sk
           KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
 
   PrepareFunction:
     Type: AWS::Serverless::Function
@@ -63,6 +70,7 @@ Resources:
             - Effect: Allow
               Action:
                 - geo-routes:CalculateRoutes
+                - geo-places:Geocode
               Resource: '*'
 
   PersistFunction:
@@ -182,6 +190,8 @@ Resources:
       CodeUri: backend/
       Handler: src/handlers/explain.handler
       Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PlansTable
         - Statement:
             - Effect: Allow
               Action: bedrock:InvokeModel

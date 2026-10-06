@@ -1,1 +1,30 @@
-{"name":"project-name-backend","version":"0.1.0","private":true,"type":"commonjs","scripts":{"dev":"ts-node local.ts","typecheck":"tsc --noEmit","test":"ts-node src/tests/core.test.ts"},"dependencies":{"@aws-sdk/client-bedrock-runtime":"^3.700.0","@aws-sdk/client-dynamodb":"^3.700.0","@aws-sdk/client-geo-routes":"^3.700.0","@aws-sdk/client-sfn":"^3.700.0","@aws-sdk/lib-dynamodb":"^3.700.0","cors":"^2.8.5","dotenv":"^16.4.7","express":"^5.0.1"},"devDependencies":{"@types/aws-lambda":"^8.10.145","@types/cors":"^2.8.17","@types/express":"^5.0.0","@types/node":"^22.10.2","ts-node":"^10.9.2","typescript":"^5.7.2"}}
+{
+  "name": "project-name-backend",
+  "version": "0.2.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "ts-node local.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "ts-node src/tests/core.test.ts && ts-node src/tests/stress.test.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.700.0",
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/client-geo-places": "^3.700.0",
+    "@aws-sdk/client-geo-routes": "^3.700.0",
+    "@aws-sdk/client-sfn": "^3.700.0",
+    "@aws-sdk/lib-dynamodb": "^3.700.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
+  }
+}

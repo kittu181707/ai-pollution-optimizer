@@ -1,5 +1,75 @@
 import type { Coordinates, EnvironmentSnapshot } from '../types';
-import { timeToMinutes } from '../core/time';
-export async function environmentAt(position:Coordinates,departureTime:string,demoMode:boolean):Promise<EnvironmentSnapshot>{if(demoMode)return demoEnvironment(departureTime);const weatherUrl=`https://api.open-meteo.com/v1/forecast?latitude=${position.lat}&longitude=${position.lon}&hourly=temperature_2m,precipitation_probability,uv_index&forecast_days=2&timezone=auto`;const airUrl=`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${position.lat}&longitude=${position.lon}&hourly=pm10,pm2_5,us_aqi&forecast_days=2&timezone=auto`;const[weather,air]=await Promise.all([fetchJson(weatherUrl),fetchJson(airUrl)]);const hour=Math.floor(timeToMinutes(departureTime)/60),wi=nearestHourIndex(weather.hourly?.time||[],hour),ai=nearestHourIndex(air.hourly?.time||[],hour);return{pm25:num(air.hourly?.pm2_5?.[ai]),pm10:num(air.hourly?.pm10?.[ai]),aqi:num(air.hourly?.us_aqi?.[ai]),temperature:num(weather.hourly?.temperature_2m?.[wi]),uvIndex:num(weather.hourly?.uv_index?.[wi]),rainProbability:num(weather.hourly?.precipitation_probability?.[wi]),source:'Open-Meteo live environmental timeline'}}
-function demoEnvironment(time:string):EnvironmentSnapshot{const m=timeToMinutes(time);if(m<660)return{pm25:148,pm10:192,aqi:186,temperature:25,uvIndex:2,rainProbability:5,source:'Controlled demo environmental data'};if(m<1020)return{pm25:82,pm10:126,aqi:121,temperature:38,uvIndex:8.2,rainProbability:8,source:'Controlled demo environmental data'};if(m<1200)return{pm25:176,pm10:236,aqi:214,temperature:31,uvIndex:2.8,rainProbability:25,source:'Controlled demo environmental data'};return{pm25:118,pm10:170,aqi:158,temperature:27,uvIndex:.2,rainProbability:72,source:'Controlled demo environmental data'}}
-async function fetchJson(url:string){const r=await fetch(url,{signal:AbortSignal.timeout(7000)});if(!r.ok)throw new Error(`Environmental feed failed (${r.status})`);return r.json() as Promise<any>}function nearestHourIndex(times:string[],hour:number){if(!times.length)return 0;let best=0,d=99;times.forEach((t,i)=>{const h=Number(t.slice(11,13)),diff=Math.abs(h-hour);if(diff<d){d=diff;best=i}});return best}function num(v:unknown){const n=Number(v);return Number.isFinite(n)?n:0}
+
+const cache = new Map<string, EnvironmentSnapshot>();
+
+export async function environmentAt(
+  position: Coordinates,
+  date: string,
+  departureTime: string,
+  demoMode: boolean,
+): Promise<EnvironmentSnapshot> {
+  if (demoMode) return demoEnvironment(departureTime);
+
+  const hour = departureTime.slice(0, 2);
+  const key = `${position.lat.toFixed(3)},${position.lon.toFixed(3)}|${date}T${hour}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${position.lat}&longitude=${position.lon}&hourly=temperature_2m,precipitation_probability,uv_index&forecast_days=3&timezone=auto`;
+  const airUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${position.lat}&longitude=${position.lon}&hourly=pm10,pm2_5,us_aqi&forecast_days=3&timezone=auto`;
+  const [weather, air] = await Promise.all([fetchJson(weatherUrl), fetchJson(airUrl)]);
+  const targetPrefix = `${date}T${hour}:`;
+  const weatherIndex = findTime(weather.hourly?.time, targetPrefix);
+  const airIndex = findTime(air.hourly?.time, targetPrefix);
+
+  const result = {
+    pm25: requiredNumber(air.hourly?.pm2_5?.[airIndex], 'PM2.5', 0),
+    pm10: requiredNumber(air.hourly?.pm10?.[airIndex], 'PM10', 0),
+    aqi: requiredNumber(air.hourly?.us_aqi?.[airIndex], 'AQI', 0),
+    temperature: requiredNumber(weather.hourly?.temperature_2m?.[weatherIndex], 'temperature'),
+    uvIndex: requiredNumber(weather.hourly?.uv_index?.[weatherIndex], 'UV index', 0),
+    rainProbability: requiredNumber(weather.hourly?.precipitation_probability?.[weatherIndex], 'rain probability', 0),
+    source: 'Open-Meteo hourly environmental data',
+  };
+
+  cache.set(key, result);
+  return result;
+}
+
+function demoEnvironment(time: string): EnvironmentSnapshot {
+  const [hour, minute] = time.split(':').map(Number);
+  const total = hour * 60 + minute;
+  if (total < 660) return { pm25: 148, pm10: 192, aqi: 186, temperature: 25, uvIndex: 2, rainProbability: 5, source: 'Controlled demo environmental data' };
+  if (total < 1020) return { pm25: 82, pm10: 126, aqi: 121, temperature: 38, uvIndex: 8.2, rainProbability: 8, source: 'Controlled demo environmental data' };
+  if (total < 1200) return { pm25: 176, pm10: 236, aqi: 214, temperature: 31, uvIndex: 2.8, rainProbability: 25, source: 'Controlled demo environmental data' };
+  return { pm25: 118, pm10: 170, aqi: 158, temperature: 27, uvIndex: 0.2, rainProbability: 72, source: 'Controlled demo environmental data' };
+}
+
+async function fetchJson(url: string) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(6000) });
+      if (!response.ok) throw new Error(`Environmental feed failed (${response.status})`);
+      return await response.json() as any;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Environmental feed unavailable');
+}
+
+function findTime(times: unknown, prefix: string) {
+  if (!Array.isArray(times)) throw new Error('Environmental feed returned no timeline');
+  const index = times.findIndex((time) => typeof time === 'string' && time.startsWith(prefix));
+  if (index < 0) throw new Error('Environmental data is unavailable for the selected day/time');
+  return index;
+}
+
+function requiredNumber(value: unknown, label: string, minimum?: number) {
+  if (value === null || value === undefined || value === '') throw new Error(`Environmental feed is missing ${label}`);
+  const number = Number(value);
+  if (!Number.isFinite(number) || (minimum !== undefined && number < minimum)) throw new Error(`Environmental feed returned invalid ${label}`);
+  return number;
+}

@@ -1,5 +1,158 @@
 import type { CalendarEvent, DayAnalysis, RouteCandidate, TripCandidateSet } from '../types';
-export interface OptimizeSetsInput{date:string;events:CalendarEvent[];sets:TripCandidateSet[];maxExtraMinutes:number;environmentSource:string;routeSource:string}
-export function optimizeCandidateSets(input:OptimizeSetsInput):DayAnalysis{const originals=input.sets.map(s=>s.original);const originalRaw=sum(originals,'modeledExposure');let tested=0,feasible=0,best:RouteCandidate[]|null=null,bestScore=Infinity;function visit(index:number,chosen:RouteCandidate[]){if(index===input.sets.length){tested++;const extra=chosen.reduce((a,c,i)=>a+Math.max(0,c.travelMinutes-originals[i].travelMinutes),0);if(extra>input.maxExtraMinutes)return;feasible++;const exposure=sum(chosen,'modeledExposure'),heatUv=sum(chosen,'highUvOutdoorMinutes')+sum(chosen,'heatRiskOutdoorMinutes'),inconvenience=extra+chosen.reduce((a,c)=>a+Math.abs(c.shiftMinutes)*.1,0),score=exposure*1000+heatUv*10+inconvenience;if(score<bestScore){bestScore=score;best=[...chosen]}return}for(const candidate of input.sets[index].candidates)visit(index+1,[...chosen,candidate])}visit(0,[]);if(!best)best=originals;const selected=best as RouteCandidate[];const optimizedRaw=sum(selected,'modeledExposure'),optimizedIndex=originalRaw>0?Math.round(optimizedRaw/originalRaw*100):100;const trips=input.sets.map((set,index)=>{const recommended=selected[index],changed=recommended.candidateId!==set.original.candidateId;return{tripId:set.journey.tripId,origin:set.journey.origin,destination:set.journey.destination,original:set.original,recommended,candidatesEvaluated:set.candidates.length,changed,explanation:explain(set.original,recommended,set.journey.origin,set.journey.destination)}});const extraTravelMinutes=selected.reduce((a,c,i)=>a+Math.max(0,c.travelMinutes-originals[i].travelMinutes),0);return{planId:`plan-${crypto.randomUUID()}`,createdAt:new Date().toISOString(),date:input.date,events:input.events,trips,changes:trips.filter(t=>t.changed),metrics:{originalExposureIndex:100,optimizedExposureIndex:optimizedIndex,exposureReductionPct:Math.max(0,100-optimizedIndex),originalRawExposure:round(originalRaw),optimizedRawExposure:round(optimizedRaw),extraTravelMinutes,appointmentsChanged:0,originalHighUvMinutes:round(sum(originals,'highUvOutdoorMinutes')),optimizedHighUvMinutes:round(sum(selected,'highUvOutdoorMinutes')),originalHeatRiskMinutes:round(sum(originals,'heatRiskOutdoorMinutes')),optimizedHeatRiskMinutes:round(sum(selected,'heatRiskOutdoorMinutes')),estimatedCo2eChangeKg:round(sum(selected,'estimatedCo2eKg')-sum(originals,'estimatedCo2eKg'),3)},workflow:{routesEvaluated:input.sets.reduce((a,s)=>a+s.candidates.length,0),dayPlansTested:tested,feasiblePlans:feasible,environmentSource:input.environmentSource,routeSource:input.routeSource}}}
-function explain(original:RouteCandidate,recommended:RouteCandidate,origin:string,destination:string){if(original.candidateId===recommended.candidateId)return`No change is needed for ${origin} to ${destination}. The original option remains the best feasible choice for the whole day.`;const pct=original.modeledExposure>0?Math.max(0,Math.round((1-recommended.modeledExposure/original.modeledExposure)*100)):0,delta=recommended.travelMinutes-original.travelMinutes;const reasons=[`the modeled exposure score falls by ${pct}%`,`${recommended.label} ${delta>=0?'adds':'saves'} ${Math.abs(delta)} travel minute${Math.abs(delta)===1?'':'s'}`];if(recommended.environment.uvIndex>=6)reasons.push(`UV index is ${recommended.environment.uvIndex.toFixed(1)} during this trip`);if(recommended.environment.pm25>original.environment.pm25*1.05)reasons.push('the shifted time has higher PM2.5, so the route/mode benefit must outweigh it');return`For ${origin} to ${destination}, ${reasons.join('; ')}. The recommendation stays inside the whole-day time constraint and keeps the appointment fixed.`}
-function sum(items:RouteCandidate[],key:keyof RouteCandidate){return items.reduce((a,item)=>a+Number(item[key]||0),0)}function round(value:number,digits=1){const p=10**digits;return Math.round(value*p)/p}
+
+export interface OptimizeSetsInput {
+  userId: string;
+  date: string;
+  events: CalendarEvent[];
+  sets: TripCandidateSet[];
+  maxExtraMinutes: number;
+  environmentSource: string;
+  routeSource: string;
+}
+
+type State = {
+  score: number;
+  selected: RouteCandidate[];
+  combinations: bigint;
+};
+
+export function optimizeCandidateSets(input: OptimizeSetsInput): DayAnalysis {
+  if (!input.sets.length) throw new Error('No journeys to optimize');
+  const originals = input.sets.map((set) => set.original);
+  const originalRaw = sum(originals, 'modeledExposure');
+
+  let states = new Map<number, State>();
+  states.set(0, { score: 0, selected: [], combinations: 1n });
+
+  for (let index = 0; index < input.sets.length; index += 1) {
+    const set = input.sets[index];
+    if (!set.candidates.length) throw new Error(`No candidates for ${set.journey.origin} → ${set.journey.destination}`);
+    const next = new Map<number, State>();
+
+    for (const [extraSoFar, state] of states.entries()) {
+      for (const candidate of set.candidates) {
+        const extra = extraSoFar + Math.max(0, candidate.travelMinutes - set.original.travelMinutes);
+        if (extra > input.maxExtraMinutes) continue;
+
+        const score = state.score + candidateScore(candidate, set.original);
+        const existing = next.get(extra);
+        const combinations = (existing?.combinations || 0n) + state.combinations;
+
+        if (!existing || score < existing.score) {
+          next.set(extra, { score, selected: [...state.selected, candidate], combinations });
+        } else {
+          next.set(extra, { ...existing, combinations });
+        }
+      }
+    }
+
+    if (!next.size) throw new Error('No feasible whole-day plan fits the extra-travel limit');
+    states = next;
+  }
+
+  let best: State | undefined;
+  for (const state of states.values()) {
+    if (!best || state.score < best.score) best = state;
+  }
+  if (!best) throw new Error('No feasible plan');
+
+  let selected = best.selected;
+  let optimizedRaw = sum(selected, 'modeledExposure');
+
+  // Avoid noisy recommendations that barely move the primary metric.
+  if (originalRaw > 0 && (originalRaw - optimizedRaw) / originalRaw < 0.01) {
+    selected = originals;
+    optimizedRaw = originalRaw;
+  }
+
+  const optimizedIndex = originalRaw > 0 ? Math.round((optimizedRaw / originalRaw) * 100) : 100;
+  const trips = input.sets.map((set, index) => {
+    const recommended = selected[index];
+    const changed = recommended.candidateId !== set.original.candidateId;
+    return {
+      tripId: set.journey.tripId,
+      origin: set.journey.origin,
+      destination: set.journey.destination,
+      original: set.original,
+      recommended,
+      candidatesEvaluated: set.candidates.length,
+      changed,
+      explanation: explain(set.original, recommended, set.journey.origin, set.journey.destination),
+    };
+  });
+
+  const extraTravelMinutes = selected.reduce(
+    (total, candidate, index) => total + Math.max(0, candidate.travelMinutes - originals[index].travelMinutes),
+    0,
+  );
+  const feasibleCombinations = [...states.values()].reduce((total, state) => total + state.combinations, 0n);
+  const totalCombinations = input.sets.reduce((total, set) => total * BigInt(set.candidates.length), 1n);
+
+  return {
+    userId: input.userId,
+    planId: `plan-${crypto.randomUUID()}`,
+    createdAt: new Date().toISOString(),
+    date: input.date,
+    events: input.events,
+    trips,
+    changes: trips.filter((trip) => trip.changed),
+    metrics: {
+      originalExposureIndex: 100,
+      optimizedExposureIndex: optimizedIndex,
+      exposureReductionPct: Math.max(0, 100 - optimizedIndex),
+      originalRawExposure: round(originalRaw),
+      optimizedRawExposure: round(optimizedRaw),
+      extraTravelMinutes,
+      appointmentsChanged: 0,
+      originalHighUvMinutes: round(sum(originals, 'highUvOutdoorMinutes')),
+      optimizedHighUvMinutes: round(sum(selected, 'highUvOutdoorMinutes')),
+      originalHeatRiskMinutes: round(sum(originals, 'heatRiskOutdoorMinutes')),
+      optimizedHeatRiskMinutes: round(sum(selected, 'heatRiskOutdoorMinutes')),
+      estimatedCo2eChangeKg: round(sum(selected, 'estimatedCo2eKg') - sum(originals, 'estimatedCo2eKg'), 3),
+    },
+    workflow: {
+      routesEvaluated: input.sets.reduce((total, set) => total + set.candidates.length, 0),
+      dayPlansTested: safeBigInt(totalCombinations),
+      feasiblePlans: safeBigInt(feasibleCombinations),
+      environmentSource: input.environmentSource,
+      routeSource: input.routeSource,
+    },
+  };
+}
+
+function candidateScore(candidate: RouteCandidate, original: RouteCandidate) {
+  const extra = Math.max(0, candidate.travelMinutes - original.travelMinutes);
+  const heatUv = candidate.highUvOutdoorMinutes + candidate.heatRiskOutdoorMinutes;
+  const timeShift = Math.abs(candidate.shiftMinutes);
+  const changePenalty = candidate.candidateId === original.candidateId ? 0 : 2;
+  return candidate.modeledExposure * 1000 + heatUv * 10 + extra + timeShift * 0.1 + changePenalty;
+}
+
+function explain(original: RouteCandidate, recommended: RouteCandidate, origin: string, destination: string) {
+  if (original.candidateId === recommended.candidateId) {
+    return `No change needed for ${origin} to ${destination}; the current trip is the best feasible choice.`;
+  }
+  const pct = original.modeledExposure > 0
+    ? Math.max(0, Math.round((1 - recommended.modeledExposure / original.modeledExposure) * 100))
+    : 0;
+  const delta = recommended.travelMinutes - original.travelMinutes;
+  const parts = [
+    `${pct}% lower modeled exposure`,
+    `${delta >= 0 ? '+' : ''}${delta} travel min`,
+  ];
+  if (recommended.shiftMinutes) parts.push(`${recommended.shiftMinutes > 0 ? '+' : ''}${recommended.shiftMinutes} min departure shift`);
+  return `${recommended.label}: ${parts.join(' · ')}.`;
+}
+
+function sum(items: RouteCandidate[], key: keyof RouteCandidate) {
+  return items.reduce((total, item) => total + Number(item[key] || 0), 0);
+}
+
+function safeBigInt(value: bigint) {
+  return value > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : Number(value);
+}
+
+function round(value: number, digits = 1) {
+  const power = 10 ** digits;
+  return Math.round(value * power) / power;
+}
