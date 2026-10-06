@@ -1,67 +1,18 @@
 import { useEffect, useRef } from 'react';
-import { AMAZON_LOCATION_API_KEY, AWS_REGION, AMAZON_LOCATION_MAP_STYLE } from '../config';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Coordinates, TripAnalysis } from '../types';
 import './LiveRouteMap.css';
 
-const MAPLIBRE_VERSION = '6.12.0';
-const SCRIPT_ID = 'clearroute-maplibre-js';
-const STYLE_ID = 'clearroute-maplibre-css';
-
-let loader: Promise<any> | null = null;
-
-function loadMapLibre() {
-  const existing = (window as any).maplibregl;
-  if (existing) return Promise.resolve(existing);
-  if (loader) return loader;
-
-  loader = new Promise((resolve, reject) => {
-    if (!document.getElementById(STYLE_ID)) {
-      const link = document.createElement('link');
-      link.id = STYLE_ID;
-      link.rel = 'stylesheet';
-      link.href = `https://cdn.jsdelivr.net/npm/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.css`;
-      link.crossOrigin = 'anonymous';
-      document.head.appendChild(link);
-    }
-
-    let script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
-    if (!script) {
-      script = document.createElement('script');
-      script.id = SCRIPT_ID;
-      script.src = `https://cdn.jsdelivr.net/npm/maplibre-gl@${MAPLIBRE_VERSION}/dist/maplibre-gl.js`;
-      script.async = true;
-      script.crossOrigin = 'anonymous';
-      document.head.appendChild(script);
-    }
-
-    const finish = () => {
-      const maplibre = (window as any).maplibregl;
-      if (maplibre) resolve(maplibre);
-      else reject(new Error('MapLibre failed to initialize'));
-    };
-
-    if ((window as any).maplibregl) finish();
-    else {
-      script.addEventListener('load', finish, { once: true });
-      script.addEventListener('error', () => reject(new Error('MapLibre failed to load')), { once: true });
-    }
-  }).catch((error) => {
-    loader = null;
-    throw error;
-  });
-
-  return loader;
-}
-
-function styleUrl() {
+function styleUrl(mapApiKey: string, region: string, mapStyle: string) {
   const params = new URLSearchParams({
-    key: AMAZON_LOCATION_API_KEY,
+    key: mapApiKey,
     'color-scheme': 'Light',
     traffic: 'All',
     'poi-density': 'Sparse',
     'travel-modes': 'Transit',
   });
-  return `https://maps.geo.${AWS_REGION}.amazonaws.com/v2/styles/${AMAZON_LOCATION_MAP_STYLE}/descriptor?${params.toString()}`;
+  return `https://maps.geo.${region}.amazonaws.com/v2/styles/${mapStyle}/descriptor?${params.toString()}`;
 }
 
 function lineFeature(points: Coordinates[]) {
@@ -72,13 +23,13 @@ function lineFeature(points: Coordinates[]) {
       type: 'LineString',
       coordinates: points.map((point) => [point.lon, point.lat]),
     },
-  };
+  } as const;
 }
 
 function sampleCollection(trip: TripAnalysis) {
   const samples = [
-    ...trip.original.environmentSamples.map((sample) => ({ ...sample, kind: 'current' })),
-    ...trip.recommended.environmentSamples.map((sample) => ({ ...sample, kind: 'recommended' })),
+    ...trip.original.environmentSamples.map((sample) => ({ ...sample, kind: 'current' as const })),
+    ...trip.recommended.environmentSamples.map((sample) => ({ ...sample, kind: 'recommended' as const })),
   ];
 
   return {
@@ -88,7 +39,7 @@ function sampleCollection(trip: TripAnalysis) {
       properties: { pm25: sample.environment.pm25, kind: sample.kind },
       geometry: { type: 'Point', coordinates: [sample.position.lon, sample.position.lat] },
     })),
-  };
+  } as const;
 }
 
 function endpointCollection(trip: TripAnalysis) {
@@ -109,18 +60,18 @@ function endpointCollection(trip: TripAnalysis) {
         geometry: { type: 'Point', coordinates: [end.lon, end.lat] },
       },
     ].filter(Boolean),
-  };
+  } as const;
 }
 
 function routePoints(trip: TripAnalysis) {
   return [...trip.original.geometry, ...trip.recommended.geometry];
 }
 
-function syncTrip(map: any, maplibre: any, trip: TripAnalysis, animate = true) {
-  const currentSource = map.getSource('clearroute-current');
-  const recommendedSource = map.getSource('clearroute-recommended');
-  const samplesSource = map.getSource('clearroute-samples');
-  const endpointsSource = map.getSource('clearroute-endpoints');
+function syncTrip(map: maplibregl.Map, trip: TripAnalysis, animate = true) {
+  const currentSource = map.getSource('clearroute-current') as maplibregl.GeoJSONSource | undefined;
+  const recommendedSource = map.getSource('clearroute-recommended') as maplibregl.GeoJSONSource | undefined;
+  const samplesSource = map.getSource('clearroute-samples') as maplibregl.GeoJSONSource | undefined;
+  const endpointsSource = map.getSource('clearroute-endpoints') as maplibregl.GeoJSONSource | undefined;
 
   currentSource?.setData(lineFeature(trip.original.geometry));
   recommendedSource?.setData(lineFeature(trip.recommended.geometry));
@@ -135,7 +86,7 @@ function syncTrip(map: any, maplibre: any, trip: TripAnalysis, animate = true) {
     return;
   }
 
-  const bounds = new maplibre.LngLatBounds();
+  const bounds = new maplibregl.LngLatBounds();
   for (const point of points) bounds.extend([point.lon, point.lat]);
   map.fitBounds(bounds, {
     padding: { top: 54, right: 54, bottom: 54, left: 54 },
@@ -144,7 +95,7 @@ function syncTrip(map: any, maplibre: any, trip: TripAnalysis, animate = true) {
   });
 }
 
-function installLayers(map: any, trip: TripAnalysis) {
+function installLayers(map: maplibregl.Map, trip: TripAnalysis) {
   map.addSource('clearroute-current', { type: 'geojson', data: lineFeature(trip.original.geometry) });
   map.addSource('clearroute-recommended', { type: 'geojson', data: lineFeature(trip.recommended.geometry) });
   map.addSource('clearroute-samples', { type: 'geojson', data: sampleCollection(trip) });
@@ -200,14 +151,16 @@ function installLayers(map: any, trip: TripAnalysis) {
   });
 }
 
-export function LiveRouteMap({ trip, onReady, onFailure }: {
+export function LiveRouteMap({ trip, mapApiKey, region, mapStyle, onReady, onFailure }: {
   trip: TripAnalysis;
+  mapApiKey: string;
+  region: string;
+  mapStyle: string;
   onReady: (source: string) => void;
   onFailure: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<any>(null);
-  const maplibreRef = useRef<any>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
   const tripRef = useRef(trip);
   const loadedRef = useRef(false);
 
@@ -215,19 +168,16 @@ export function LiveRouteMap({ trip, onReady, onFailure }: {
 
   useEffect(() => {
     let active = true;
-    if (!containerRef.current || !AMAZON_LOCATION_API_KEY) {
+    if (!containerRef.current || !mapApiKey) {
       onFailure();
       return;
     }
 
-    void loadMapLibre().then((maplibre) => {
-      if (!active || !containerRef.current) return;
-      maplibreRef.current = maplibre;
-
+    try {
       const first = routePoints(tripRef.current)[0];
-      const map = new maplibre.Map({
+      const map = new maplibregl.Map({
         container: containerRef.current,
-        style: styleUrl(),
+        style: styleUrl(mapApiKey, region, mapStyle),
         center: first ? [first.lon, first.lat] : [77.209, 28.6139],
         zoom: first ? 12 : 10,
         attributionControl: true,
@@ -237,13 +187,13 @@ export function LiveRouteMap({ trip, onReady, onFailure }: {
       });
 
       mapRef.current = map;
-      map.addControl(new maplibre.NavigationControl({ showCompass: false, visualizePitch: false }), 'top-right');
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false, visualizePitch: false }), 'top-right');
 
       map.once('load', () => {
         if (!active) return;
         loadedRef.current = true;
         installLayers(map, tripRef.current);
-        syncTrip(map, maplibre, tripRef.current, false);
+        syncTrip(map, tripRef.current, false);
         requestAnimationFrame(() => map.resize());
         onReady('Amazon Location Maps V2 · live traffic');
       });
@@ -251,9 +201,9 @@ export function LiveRouteMap({ trip, onReady, onFailure }: {
       map.on('error', () => {
         if (!loadedRef.current && active) onFailure();
       });
-    }).catch(() => {
+    } catch {
       if (active) onFailure();
-    });
+    }
 
     return () => {
       active = false;
@@ -261,13 +211,12 @@ export function LiveRouteMap({ trip, onReady, onFailure }: {
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [onFailure, onReady]);
+  }, [mapApiKey, region, mapStyle, onFailure, onReady]);
 
   useEffect(() => {
     const map = mapRef.current;
-    const maplibre = maplibreRef.current;
-    if (!map || !maplibre || !loadedRef.current) return;
-    syncTrip(map, maplibre, trip, true);
+    if (!map || !loadedRef.current) return;
+    syncTrip(map, trip, true);
   }, [trip]);
 
   return <div className="live-route-map-shell">
