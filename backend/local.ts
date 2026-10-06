@@ -6,6 +6,7 @@ import { handler as ics } from './src/handlers/ics';
 import { handler as demo } from './src/handlers/demo';
 import { handler as explain } from './src/handlers/explain';
 import { handler as environmentCurrent } from './src/handlers/environment-current';
+import { handler as runtimeConfig } from './src/handlers/runtime-config';
 import { runDirectAnalysis } from './src/services/analyze';
 import { handler as prepare } from './src/handlers/prepare';
 
@@ -57,6 +58,7 @@ app.get('/api/history', (req, res) => {
   return res.json({ plans: memory.get(`history:${userId}`) || [] });
 });
 
+app.get('/api/config', async (req, res) => send(res, await runtimeConfig(event(req))));
 app.post('/api/environment/current', async (req, res) => send(res, await environmentCurrent(event(req))));
 app.post('/api/map/static', (_req, res) => res.json({ imageDataUrl: null, source: 'Local geometry preview' }));
 app.post('/api/explain', async (req, res) => send(res, await explain(event(req))));
