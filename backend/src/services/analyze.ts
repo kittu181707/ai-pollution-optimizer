@@ -3,6 +3,7 @@ import type {
   BaseRoute,
   PreparedRequest,
   RouteCandidate,
+  RouteEnvironmentSample,
   TransportMode,
   TripCandidateSet,
   Coordinates,
@@ -14,7 +15,9 @@ import { scoreRoute } from '../core/exposure';
 import { shiftTime, timeToMinutes, availableMinutes } from '../core/time';
 import { optimizeCandidateSets } from '../core/optimizer';
 
-const ALT_MODE_ORDER: TransportMode[] = ['metro', 'bus', 'car', 'bike', 'walk'];
+export const TIME_SHIFT_OPTIONS = [-10, -5, 0, 5, 10] as const;
+export const ALT_MODE_ORDER: TransportMode[] = ['metro', 'bus', 'car', 'bike', 'walk'];
+const MAX_ENVIRONMENT_SAMPLES = 3;
 
 type RouteJob = {
   mode: TransportMode;
@@ -24,6 +27,7 @@ type RouteJob = {
 };
 
 export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayRequest) {
+  const demoMode = input.demoMode ?? process.env.DEMO_MODE === 'true';
   const sets: TripCandidateSet[] = [];
   const environmentSources = new Set<string>();
   const routeSources = new Set<string>();
@@ -31,21 +35,21 @@ export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayReque
   for (let index = 0; index < input.journeys.length; index += 1) {
     const journey = input.journeys[index];
     const [origin, destination] = await Promise.all([
-      geocode(journey.origin),
-      geocode(journey.destination),
+      geocode(journey.origin, demoMode),
+      geocode(journey.destination, demoMode),
     ]);
 
     const earliestDeparture = earliestDepartureForJourney(input.events, journey.origin, journey.destination, journey.arriveBy);
     const jobs: RouteJob[] = [];
 
-    for (const shift of [-10, 0, 10]) {
+    for (const shift of TIME_SHIFT_OPTIONS) {
       const departureTime = shiftTime(journey.departureTime, shift);
       if (earliestDeparture && timeToMinutes(departureTime) < timeToMinutes(earliestDeparture)) continue;
       if (availableMinutes(departureTime, journey.arriveBy) <= 0) continue;
       jobs.push({ mode: journey.mode, shift, departureTime, includeAlternative: shift === 0 });
     }
 
-    for (const mode of ALT_MODE_ORDER.filter((mode) => mode !== journey.mode).slice(0, 3)) {
+    for (const mode of ALT_MODE_ORDER.filter((mode) => mode !== journey.mode)) {
       jobs.push({ mode, shift: 0, departureTime: journey.departureTime, includeAlternative: false });
     }
 
@@ -57,6 +61,7 @@ export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayReque
         date: input.date,
         departureTime: job.departureTime,
         arriveBy: journey.arriveBy,
+        demoMode,
         tripOrdinal: index,
       });
       return { job, routes };
@@ -72,7 +77,7 @@ export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayReque
         return;
       }
 
-      const limit = result.value.job.includeAlternative ? 2 : 1;
+      const limit = result.value.job.includeAlternative ? 3 : 1;
       for (const route of result.value.routes.slice(0, limit)) {
         if (route.mode !== journey.mode && !isRealisticAlternative(route)) continue;
         if (route.travelMinutes > availableMinutes(job.departureTime, journey.arriveBy)) continue;
@@ -81,9 +86,11 @@ export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayReque
       }
     });
 
-    if (originalRoutingError) throw originalRoutingError instanceof Error
-      ? originalRoutingError
-      : new Error(`Could not route ${journey.origin} → ${journey.destination}`);
+    if (originalRoutingError) {
+      throw originalRoutingError instanceof Error
+        ? originalRoutingError
+        : new Error(`Could not route ${journey.origin} → ${journey.destination}`);
+    }
 
     const originalRoute = routeCandidates.find(({ route, job }) =>
       route.mode === journey.mode && job.shift === 0,
@@ -91,8 +98,14 @@ export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayReque
     if (!originalRoute) throw new Error(`Original ${journey.mode} trip cannot arrive by its fixed appointment`);
 
     const scored = await Promise.all(routeCandidates.map(async ({ route, job }) => {
-      const environment = await environmentAt(routePoint(route.geometry, origin, destination), input.date, job.departureTime);
-      environmentSources.add(environment.source);
+      const routeSamples = sampleRoute(route.geometry.length ? route.geometry : [origin, destination], route.travelMinutes);
+      const environmentSamples: RouteEnvironmentSample[] = await Promise.all(routeSamples.map(async (sample) => {
+        const sampleTime = shiftTime(job.departureTime, Math.round(sample.elapsedMinutes));
+        const environment = await environmentAt(sample.position, input.date, sampleTime, demoMode);
+        environmentSources.add(environment.source);
+        return { position: sample.position, minutes: sample.minutes, environment };
+      }));
+
       return scoreRoute({
         candidateId: `${journey.tripId}-${route.routeId}-${job.shift}`,
         routeId: route.routeId,
@@ -105,11 +118,11 @@ export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayReque
         source: route.source,
         departureTime: job.departureTime,
         shiftMinutes: job.shift,
-        environment,
+        environmentSamples,
       });
     }));
 
-    const candidates = dedupe(scored).slice(0, 7);
+    const candidates = dedupe(scored).slice(0, 12);
     const original = candidates.find((candidate) =>
       candidate.routeId === originalRoute.route.routeId
       && candidate.mode === journey.mode
@@ -131,9 +144,45 @@ export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayReque
   });
 }
 
-function routePoint(geometry: Coordinates[], origin: Coordinates, destination: Coordinates) {
-  if (!geometry.length) return { lat: (origin.lat + destination.lat) / 2, lon: (origin.lon + destination.lon) / 2 };
-  return geometry[Math.floor(geometry.length / 2)];
+function sampleRoute(geometry: Coordinates[], travelMinutes: number) {
+  const points = geometry.length >= 2 ? geometry : [geometry[0], geometry[0]];
+  const segmentDistances = points.slice(0, -1).map((point, index) => distanceKm(point, points[index + 1]));
+  const totalDistance = segmentDistances.reduce((sum, distance) => sum + distance, 0);
+  const count = MAX_ENVIRONMENT_SAMPLES;
+  const minutes = travelMinutes / count;
+
+  if (!(totalDistance > 0)) {
+    return Array.from({ length: count }, (_, index) => ({
+      position: points[0],
+      minutes,
+      elapsedMinutes: minutes * index,
+    }));
+  }
+
+  return Array.from({ length: count }, (_, index) => {
+    const fraction = (index + .5) / count;
+    return {
+      position: pointAlongRoute(points, segmentDistances, totalDistance * fraction),
+      minutes,
+      elapsedMinutes: travelMinutes * index / count,
+    };
+  });
+}
+
+function pointAlongRoute(points: Coordinates[], distances: number[], targetDistance: number) {
+  let traversed = 0;
+  for (let index = 0; index < distances.length; index += 1) {
+    const distance = distances[index];
+    if (targetDistance <= traversed + distance || index === distances.length - 1) {
+      const fraction = distance > 0 ? Math.min(1, Math.max(0, (targetDistance - traversed) / distance)) : 0;
+      return {
+        lat: points[index].lat + (points[index + 1].lat - points[index].lat) * fraction,
+        lon: points[index].lon + (points[index + 1].lon - points[index].lon) * fraction,
+      };
+    }
+    traversed += distance;
+  }
+  return points[points.length - 1];
 }
 
 function isRealisticAlternative(route: BaseRoute) {
@@ -169,10 +218,20 @@ function dedupe(items: RouteCandidate[]) {
       item.travelMinutes,
       item.departureTime,
       item.distanceKm.toFixed(2),
-      item.modeledExposure.toFixed(1),
+      item.pollutionExposure.toFixed(1),
     ].join('|');
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+function distanceKm(a: Coordinates, b: Coordinates) {
+  const radius = 6371;
+  const radians = Math.PI / 180;
+  const deltaLat = (b.lat - a.lat) * radians;
+  const deltaLon = (b.lon - a.lon) * radians;
+  const h = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(a.lat * radians) * Math.cos(b.lat * radians) * Math.sin(deltaLon / 2) ** 2;
+  return radius * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }

@@ -1,4 +1,5 @@
 import type { Coordinates } from '../types';
+import { DEMO_COORDS } from '../core/demo';
 
 const cache = new Map<string, Coordinates>();
 let clientPromise: Promise<any> | null = null;
@@ -10,10 +11,11 @@ async function client() {
   return clientPromise;
 }
 
-export async function geocode(location: string): Promise<Coordinates> {
+export async function geocode(location: string, demoMode: boolean): Promise<Coordinates> {
   const query = location.trim();
   if (!query) throw new Error('Location is required');
   if (query.length > 200) throw new Error('Location is too long');
+  if (demoMode && DEMO_COORDS[query]) return DEMO_COORDS[query];
 
   const key = query.toLowerCase();
   const cached = cache.get(key);

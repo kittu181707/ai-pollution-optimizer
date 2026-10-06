@@ -25,6 +25,7 @@ export interface AnalyzeDayRequest {
   events: CalendarEvent[];
   journeys: JourneyInput[];
   maxExtraMinutes: number;
+  demoMode?: boolean;
 }
 
 export interface Coordinates { lat: number; lon: number }
@@ -34,9 +35,17 @@ export interface EnvironmentSnapshot {
   pm10: number;
   aqi: number;
   temperature: number;
+  humidity: number;
+  windSpeed: number;
   uvIndex: number;
   rainProbability: number;
   source: string;
+}
+
+export interface RouteEnvironmentSample {
+  position: Coordinates;
+  minutes: number;
+  environment: EnvironmentSnapshot;
 }
 
 export interface BaseRoute {
@@ -56,10 +65,12 @@ export interface RouteCandidate extends BaseRoute {
   shiftMinutes: number;
   modeledExposure: number;
   pollutionExposure: number;
+  weatherPenalty: number;
   highUvOutdoorMinutes: number;
   heatRiskOutdoorMinutes: number;
   estimatedCo2eKg: number;
   environment: EnvironmentSnapshot;
+  environmentSamples: RouteEnvironmentSample[];
 }
 
 export interface TripCandidateSet {
@@ -85,6 +96,9 @@ export interface AnalysisMetrics {
   exposureReductionPct: number;
   originalRawExposure: number;
   optimizedRawExposure: number;
+  originalPollutionExposure: number;
+  optimizedPollutionExposure: number;
+  pollutionReductionPct: number;
   extraTravelMinutes: number;
   appointmentsChanged: number;
   originalHighUvMinutes: number;
@@ -109,6 +123,7 @@ export interface DayAnalysis {
     feasiblePlans: number;
     environmentSource: string;
     routeSource: string;
+    environmentalSamples: number;
   };
 }
 
