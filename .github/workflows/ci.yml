@@ -64,6 +64,36 @@ jobs:
           if (plan.changes.length !== 1 || plan.changes[0].tripId !== 'd3') throw new Error('demo must have one dominant change');
           if (plan.workflow.dataMode !== 'demo') throw new Error('demo provenance missing');
 
+          const dateToken = new Date(Date.now() + 330 * 60_000).toISOString().slice(0,10).replace(/-/g,'');
+          const icsText = [
+            'BEGIN:VCALENDAR',
+            'BEGIN:VEVENT',
+            'UID:ci-ics',
+            'DTSTART;TZID=Asia/Kolkata:' + dateToken + 'T090000',
+            'DTEND;TZID=Asia/Kolkata:' + dateToken + 'T100000',
+            'SUMMARY:CI meeting',
+            'LOCATION:Office',
+            'END:VEVENT',
+            'END:VCALENDAR',
+          ].join('\r\n');
+          const imported = await fetch('http://127.0.0.1:3001/api/ics/parse', {
+            method:'POST',
+            headers:{'content-type':'application/json'},
+            body:JSON.stringify({icsText})
+          });
+          if (!imported.ok) throw new Error('ICS HTTP smoke failed: ' + await imported.text());
+          const importedDay = await imported.json();
+          if (importedDay.events?.length !== 1 || importedDay.events[0]?.start !== '09:00') throw new Error('ICS import produced wrong event');
+
+          const explain = await fetch('http://127.0.0.1:3001/api/explain', {
+            method:'POST',
+            headers:{'content-type':'application/json'},
+            body:JSON.stringify({planId:plan.planId,tripId:'d3',change:plan.changes[0]})
+          });
+          if (!explain.ok) throw new Error('explain HTTP smoke failed');
+          const explanation = await explain.json();
+          if (typeof explanation.explanation !== 'string' || !explanation.explanation.trim()) throw new Error('explain response was empty');
+
           const accept = await fetch('http://127.0.0.1:3001/api/plan/accept', {
             method:'POST',
             headers:{'content-type':'application/json'},
@@ -80,7 +110,7 @@ jobs:
             body:JSON.stringify({planId:plan.planId,tripId:'d3',change:plan.changes[0]})
           });
           if (!map.ok) throw new Error('map HTTP smoke failed');
-          console.log('local API demo → analyze → accept → history → map smoke passed');
+          console.log('local API demo → analyze → ICS → explain → accept → history → map smoke passed');
           NODE
 
       - name: AWS SAM deployability

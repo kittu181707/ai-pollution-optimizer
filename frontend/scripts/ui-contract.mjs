@@ -47,12 +47,15 @@ assert(!sourceText.includes('react-leaflet'), 'Leaflet must not coexist with Ama
 assert(!sourceText.includes('cartocdn'), 'CARTO tiles must not return');
 assert(!packageJson.includes('leaflet'), 'Leaflet dependencies must not return');
 assert(!existsSync(join(root, 'src/components/Map.tsx')), 'legacy contributor Leaflet Map.tsx must remain removed');
+assert(!existsSync(join(root, 'src/components/DayRoutePanel.tsx')), 'retired split-panel component must remain removed');
+assert(!existsSync(join(root, 'src/screens/ChangesScreen.tsx')), 'retired intermediate changes screen must remain removed');
 
 for (const required of ['decision-summary', "Today's journeys", 'Best change', 'RoutePreview', 'Review plan']) {
   assert(overview.includes(required), 'simple judge dashboard missing ' + required);
 }
 assert(snapshot.includes('DEMO DATA') && snapshot.includes('LIVE DATA'), 'environment provenance must remain explicit');
 assert(styles.includes('.app-shell') && styles.includes('.dashboard-grid'), 'responsive app shell/dashboard styling missing');
+assert(!styles.includes('.split-layout') && !styles.includes('.exposure-hero'), 'retired dashboard CSS must not return');
 assert(styles.includes('grid-template-columns: 218px'), 'desktop navigation shell missing');
 assert(routePreview.includes('api.routeMap'), 'route comparison must use hardened Amazon Location map endpoint');
 assert(routePreview.includes('environmentSamples'), 'route hotspots must use route samples, not a fake origin circle');
