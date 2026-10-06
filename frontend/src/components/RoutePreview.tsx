@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '../api';
-import { AMAZON_LOCATION_API_KEY } from '../config';
+import { api, type RuntimeConfig } from '../api';
+import { AMAZON_LOCATION_API_KEY, AMAZON_LOCATION_MAP_STYLE, AWS_REGION } from '../config';
 import type { Coordinates, RouteEnvironmentSample, TripAnalysis } from '../types';
 import { LiveRouteMap } from './LiveRouteMap';
 import './RoutePreview.css';
@@ -34,11 +34,49 @@ function color(sample: RouteEnvironmentSample) {
   return '#137a50';
 }
 
+function buildTimeMapConfig(): RuntimeConfig | undefined {
+  if (!AMAZON_LOCATION_API_KEY) return undefined;
+  return {
+    region: AWS_REGION,
+    mapStyle: AMAZON_LOCATION_MAP_STYLE,
+    mapApiKey: AMAZON_LOCATION_API_KEY,
+    source: 'Amplify build environment',
+  };
+}
+
 export function RoutePreview({ planId, trip }: { planId: string; trip: TripAnalysis }) {
-  const liveConfigured = Boolean(AMAZON_LOCATION_API_KEY);
+  const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | undefined>(buildTimeMapConfig);
   const [liveFailed, setLiveFailed] = useState(false);
   const [mapImage, setMapImage] = useState<string | null>(null);
-  const [mapSource, setMapSource] = useState(liveConfigured ? 'Amazon Location Maps V2 · loading live map' : 'Route geometry preview');
+  const [mapSource, setMapSource] = useState(runtimeConfig?.mapApiKey ? 'Amazon Location Maps V2 · loading live map' : 'Loading map configuration');
+
+  useEffect(() => {
+    if (AMAZON_LOCATION_API_KEY) return;
+    let active = true;
+
+    void api.runtimeConfig().then((config) => {
+      if (!active) return;
+      setRuntimeConfig(config);
+      setMapSource(config.mapApiKey ? 'Amazon Location Maps V2 · loading live map' : 'Amazon Location static fallback');
+    }).catch(() => {
+      if (!active) return;
+      setRuntimeConfig({
+        region: AWS_REGION,
+        mapStyle: AMAZON_LOCATION_MAP_STYLE,
+        mapApiKey: null,
+        source: 'runtime config unavailable',
+      });
+      setMapSource('Amazon Location static fallback');
+    });
+
+    return () => { active = false; };
+  }, []);
+
+  const mapApiKey = runtimeConfig?.mapApiKey || '';
+  const mapRegion = runtimeConfig?.region || AWS_REGION;
+  const mapStyle = runtimeConfig?.mapStyle || AMAZON_LOCATION_MAP_STYLE;
+  const configLoading = runtimeConfig === undefined;
+  const liveConfigured = Boolean(mapApiKey);
 
   const onLiveReady = useCallback((source: string) => {
     setMapSource(source);
@@ -52,10 +90,11 @@ export function RoutePreview({ planId, trip }: { planId: string; trip: TripAnaly
   useEffect(() => {
     setLiveFailed(false);
     setMapImage(null);
-    setMapSource(liveConfigured ? 'Amazon Location Maps V2 · loading live map' : 'Route geometry preview');
-  }, [liveConfigured, planId, trip.tripId, trip.original.candidateId, trip.recommended.candidateId]);
+    if (configLoading) setMapSource('Loading map configuration');
+    else setMapSource(liveConfigured ? 'Amazon Location Maps V2 · loading live map' : 'Amazon Location static fallback');
+  }, [configLoading, liveConfigured, planId, trip.tripId, trip.original.candidateId, trip.recommended.candidateId]);
 
-  const useStaticFallback = !liveConfigured || liveFailed;
+  const useStaticFallback = !configLoading && (!liveConfigured || liveFailed);
 
   useEffect(() => {
     if (!useStaticFallback) return;
@@ -112,7 +151,14 @@ export function RoutePreview({ planId, trip }: { planId: string; trip: TripAnaly
   return <div className="route-preview">
     <div className="route-map-stage">
       {liveConfigured && !liveFailed
-        ? <LiveRouteMap trip={trip} onReady={onLiveReady} onFailure={onLiveFailure}/>
+        ? <LiveRouteMap
+            trip={trip}
+            mapApiKey={mapApiKey}
+            region={mapRegion}
+            mapStyle={mapStyle}
+            onReady={onLiveReady}
+            onFailure={onLiveFailure}
+          />
         : fallbackGraphic}
     </div>
 
