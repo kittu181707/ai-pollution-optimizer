@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  ai-pollution-optimizer
+  SAM Template for the backend of AI Personal Pollution Optimizer
+
+Globals:
+  Function:
+    Timeout: 3
+    MemorySize: 128
+    Runtime: nodejs20.x
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref TripsTable
+
+Resources:
+  TripsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ai-pollution-optimizer-trips
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: tripId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: tripId
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  OptimizeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/optimize.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TripsTable
+      Events:
+        Optimize:
+          Type: Api
+          Properties:
+            Path: /api/optimize
+            Method: post
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/api/"
