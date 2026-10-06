@@ -4,7 +4,7 @@ export interface JourneyInput { tripId:string; origin:string; destination:string
 export interface AgendaPayload { date:string; homeLocation:string; events:CalendarEvent[] }
 export interface AnalyzeDayRequest extends AgendaPayload { userId:string; journeys:JourneyInput[]; maxExtraMinutes:number; demoMode?:boolean }
 export interface Coordinates { lat:number; lon:number }
-export interface EnvironmentSnapshot { pm25:number; pm10:number; aqi:number; temperature:number; humidity:number; windSpeed:number; uvIndex:number; rainProbability:number; source:string }
+export interface EnvironmentSnapshot { pm25:number; pm10:number; aqi:number; temperature:number; humidity:number; windSpeed:number; uvIndex:number; rainProbability:number; source:string; updatedAt?:string; validAt?:string }
 export interface RouteEnvironmentSample { position:Coordinates; minutes:number; environment:EnvironmentSnapshot }
 export interface RouteCandidate { candidateId:string; tripId:string; mode:TransportMode; label:string; departureTime:string; shiftMinutes:number; travelMinutes:number; distanceKm:number; modeledExposure:number; pollutionExposure:number; weatherPenalty:number; highUvOutdoorMinutes:number; heatRiskOutdoorMinutes:number; estimatedCo2eKg:number; environment:EnvironmentSnapshot; environmentSamples:RouteEnvironmentSample[]; geometry:Coordinates[]; source:string }
 export interface TripAnalysis { tripId:string; origin:string; destination:string; original:RouteCandidate; recommended:RouteCandidate; candidatesEvaluated:number; changed:boolean; explanation:string }

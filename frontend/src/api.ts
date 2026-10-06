@@ -1,5 +1,5 @@
 import { API_BASE_URL } from './config';
-import type { AcceptedPlan, AgendaPayload, AnalyzeDayRequest, DayAnalysis, TripAnalysis } from './types';
+import type { AcceptedPlan, AgendaPayload, AnalyzeDayRequest, Coordinates, DayAnalysis, EnvironmentSnapshot, TripAnalysis } from './types';
 
 async function request<T>(path: string, init?: RequestInit, timeoutMs = 15_000): Promise<T> {
   const controller = new AbortController();
@@ -31,6 +31,7 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ planId, tripId: trip.tripId, change: trip }),
   }),
+  currentEnvironment: (position: Coordinates) => request<EnvironmentSnapshot>('/api/environment/current', { method: 'POST', body: JSON.stringify({ position }) }, 12_000),
   routeMap: (planId: string, trip: TripAnalysis) => request<{ imageDataUrl: string | null; source: string }>('/api/map/static', {
     method: 'POST',
     body: JSON.stringify({ planId, tripId: trip.tripId, change: trip }),

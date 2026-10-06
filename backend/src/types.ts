@@ -40,6 +40,8 @@ export interface EnvironmentSnapshot {
   uvIndex: number;
   rainProbability: number;
   source: string;
+  updatedAt?: string;
+  validAt?: string;
 }
 
 export interface RouteEnvironmentSample {

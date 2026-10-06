@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
+import { AMAZON_LOCATION_API_KEY } from '../config';
 import type { Coordinates, RouteEnvironmentSample, TripAnalysis } from '../types';
+import { LiveRouteMap } from './LiveRouteMap';
 import './RoutePreview.css';
 
 type Point = { x: number; y: number };
@@ -33,13 +35,32 @@ function color(sample: RouteEnvironmentSample) {
 }
 
 export function RoutePreview({ planId, trip }: { planId: string; trip: TripAnalysis }) {
+  const liveConfigured = Boolean(AMAZON_LOCATION_API_KEY);
+  const [liveFailed, setLiveFailed] = useState(false);
   const [mapImage, setMapImage] = useState<string | null>(null);
-  const [mapSource, setMapSource] = useState('Route geometry preview');
+  const [mapSource, setMapSource] = useState(liveConfigured ? 'Amazon Location Maps V2 · loading live map' : 'Route geometry preview');
+
+  const onLiveReady = useCallback((source: string) => {
+    setMapSource(source);
+    setLiveFailed(false);
+  }, []);
+  const onLiveFailure = useCallback(() => {
+    setLiveFailed(true);
+    setMapSource('Amazon Location static fallback');
+  }, []);
 
   useEffect(() => {
+    setLiveFailed(false);
+    setMapImage(null);
+    setMapSource(liveConfigured ? 'Amazon Location Maps V2 · loading live map' : 'Route geometry preview');
+  }, [liveConfigured, planId, trip.tripId, trip.original.candidateId, trip.recommended.candidateId]);
+
+  const useStaticFallback = !liveConfigured || liveFailed;
+
+  useEffect(() => {
+    if (!useStaticFallback) return;
     let active = true;
     setMapImage(null);
-    setMapSource('Route geometry preview');
     void api.routeMap(planId, trip).then((result) => {
       if (!active) return;
       setMapImage(result.imageDataUrl);
@@ -48,7 +69,7 @@ export function RoutePreview({ planId, trip }: { planId: string; trip: TripAnaly
       if (active) setMapSource('Route geometry preview');
     });
     return () => { active = false; };
-  }, [planId, trip.tripId, trip.original.candidateId, trip.recommended.candidateId]);
+  }, [useStaticFallback, planId, trip.tripId, trip.original.candidateId, trip.recommended.candidateId]);
 
   const fallback = useMemo(() => {
     const all = [...trip.original.geometry, ...trip.recommended.geometry];
@@ -66,29 +87,33 @@ export function RoutePreview({ planId, trip }: { planId: string; trip: TripAnaly
     ? Math.max(0, Math.round((1 - trip.recommended.pollutionExposure / trip.original.pollutionExposure) * 100))
     : 0;
 
+  const fallbackGraphic = mapImage ? <img src={mapImage} alt="Amazon Location map comparing current and recommended routes with exposure sample hotspots"/> :
+    <svg viewBox="0 0 300 180" role="img" aria-label="Current and recommended route geometry with pollution sample hotspots">
+      <defs>
+        <pattern id={`grid-${trip.tripId}`} width="24" height="24" patternUnits="userSpaceOnUse">
+          <path d="M 24 0 L 0 0 0 24" fill="none" stroke="currentColor" strokeOpacity=".055"/>
+        </pattern>
+      </defs>
+      <rect width="300" height="180" fill={`url(#grid-${trip.tripId})`}/>
+      {fallback.original && <path className="route original" d={fallback.original}/>}
+      {fallback.optimized && <path className="route optimized" d={fallback.optimized}/>}
+      {trip.original.environmentSamples.map((sample, index) => {
+        const point = fallback.project(sample.position);
+        return <circle key={`o-${index}`} cx={point.x} cy={point.y} r="9" fill={color(sample)} opacity=".24"/>;
+      })}
+      {trip.recommended.environmentSamples.map((sample, index) => {
+        const point = fallback.project(sample.position);
+        return <circle key={`r-${index}`} cx={point.x} cy={point.y} r="4" fill={color(sample)}/>;
+      })}
+      <circle cx={fallback.start.x} cy={fallback.start.y} r="5" className="route-dot"/>
+      <circle cx={fallback.end.x} cy={fallback.end.y} r="5" className="route-dot end"/>
+    </svg>;
+
   return <div className="route-preview">
     <div className="route-map-stage">
-      {mapImage ? <img src={mapImage} alt="Amazon Location map comparing current and recommended routes with exposure sample hotspots"/> :
-        <svg viewBox="0 0 300 180" role="img" aria-label="Current and recommended route geometry with pollution sample hotspots">
-          <defs>
-            <pattern id={`grid-${trip.tripId}`} width="24" height="24" patternUnits="userSpaceOnUse">
-              <path d="M 24 0 L 0 0 0 24" fill="none" stroke="currentColor" strokeOpacity=".055"/>
-            </pattern>
-          </defs>
-          <rect width="300" height="180" fill={`url(#grid-${trip.tripId})`}/>
-          {fallback.original && <path className="route original" d={fallback.original}/>}
-          {fallback.optimized && <path className="route optimized" d={fallback.optimized}/>}
-          {trip.original.environmentSamples.map((sample, index) => {
-            const point = fallback.project(sample.position);
-            return <circle key={`o-${index}`} cx={point.x} cy={point.y} r="9" fill={color(sample)} opacity=".24"/>;
-          })}
-          {trip.recommended.environmentSamples.map((sample, index) => {
-            const point = fallback.project(sample.position);
-            return <circle key={`r-${index}`} cx={point.x} cy={point.y} r="4" fill={color(sample)}/>;
-          })}
-          <circle cx={fallback.start.x} cy={fallback.start.y} r="5" className="route-dot"/>
-          <circle cx={fallback.end.x} cy={fallback.end.y} r="5" className="route-dot end"/>
-        </svg>}
+      {liveConfigured && !liveFailed
+        ? <LiveRouteMap trip={trip} onReady={onLiveReady} onFailure={onLiveFailure}/>
+        : fallbackGraphic}
     </div>
 
     <div className="route-compare-grid">

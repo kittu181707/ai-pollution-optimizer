@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { handler as prepare } from '../handlers/prepare';
+import { handler as currentEnvironment } from '../handlers/environment-current';
 import { parseIcs } from '../core/ics';
 import { isValidTime, timeToMinutes, availableMinutes } from '../core/time';
 import { optimizeCandidateSets } from '../core/optimizer';
@@ -149,6 +150,12 @@ async function main() {
     }),
     /Bike routing is unavailable/,
   );
+
+
+  const invalidEnvironment = await currentEnvironment({
+    body: JSON.stringify({ position: { lat: 120, lon: 77.2 } }),
+  } as any);
+  assert.equal(invalidEnvironment.statusCode, 400, 'live environment endpoint must reject invalid coordinates');
 
   const day = demoDay();
   const demoRequest = {

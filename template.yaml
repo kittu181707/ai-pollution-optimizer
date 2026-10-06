@@ -10,6 +10,14 @@ Parameters:
   BedrockModelId:
     Type: String
     Default: ''
+  TomorrowIoApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+  MapAllowedReferer:
+    Type: String
+    Default: '*'
+    Description: Browser referer allowed to use the public map-only Amazon Location key. Tighten this to the Amplify domain in production.
   AppTimezoneOffset:
     Type: String
     Default: '+05:30'
@@ -34,6 +42,22 @@ Globals:
       AllowOrigin: "'*'"
 
 Resources:
+  LiveMapApiKey:
+    Type: AWS::Location::APIKey
+    Properties:
+      KeyName: !Sub '${AWS::StackName}-web-map'
+      Description: ClearRoute browser key restricted to Amazon Location Maps V2 rendering
+      NoExpiry: true
+      ForceDelete: true
+      ForceUpdate: true
+      Restrictions:
+        AllowActions:
+          - geo-maps:*
+        AllowResources:
+          - !Sub 'arn:${AWS::Partition}:geo-maps:${AWS::Region}::provider/default'
+        AllowReferers:
+          - !Ref MapAllowedReferer
+
   PlansTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -86,6 +110,9 @@ Resources:
       Handler: src/handlers/optimize.handler
       Timeout: 90
       MemorySize: 768
+      Environment:
+        Variables:
+          TOMORROW_IO_API_KEY: !Ref TomorrowIoApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -271,6 +298,31 @@ Resources:
             Path: /api/history
             Method: get
 
+
+  EnvironmentCurrentFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/environment-current.ts
+        Minify: true
+        Target: es2022
+        Sourcemap: false
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/environment-current.handler
+      Timeout: 15
+      Environment:
+        Variables:
+          TOMORROW_IO_API_KEY: !Ref TomorrowIoApiKey
+      Events:
+        CurrentEnvironment:
+          Type: Api
+          Properties:
+            Path: /api/environment/current
+            Method: post
+
   MapFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -329,6 +381,9 @@ Resources:
             Method: post
 
 Outputs:
+  LiveMapApiKeyName:
+    Description: Amazon Location API key name. Retrieve its public value with aws location describe-key and set VITE_AMAZON_LOCATION_API_KEY in Amplify.
+    Value: !Ref LiveMapApiKey
   ApiEndpoint:
     Description: API Gateway base URL
     Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'

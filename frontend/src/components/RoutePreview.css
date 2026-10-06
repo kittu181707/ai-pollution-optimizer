@@ -51,3 +51,9 @@
   .route-compare-grid { grid-template-columns: 1fr; }
   .route-legend .map-source { display: none; }
 }
+
+.route-map-stage > .live-route-map-shell {
+  width: 100%;
+  min-height: inherit;
+  align-self: stretch;
+}

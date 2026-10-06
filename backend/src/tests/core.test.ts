@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { scoreRoute } from '../core/exposure';
 import { optimizeCandidateSets } from '../core/optimizer';
+import { snapshotFromTomorrowValues } from '../services/environment';
 import type { EnvironmentSnapshot, RouteCandidate, TripCandidateSet } from '../types';
 
 const env: EnvironmentSnapshot = {
@@ -143,4 +144,23 @@ const segmented = scoreRoute({
 assert.equal(segmented.pollutionExposure, 2000);
 assert.equal(segmented.environment.pm25, 100);
 
-console.log('core optimizer and exposure tests passed');
+
+const tomorrow = snapshotFromTomorrowValues({
+  particulateMatter25: 44,
+  particulateMatter10: 71,
+  epaIndex: 92,
+  temperature: 29.5,
+  humidity: 61,
+  windSpeed: 8.4,
+  uvIndex: 5.1,
+  precipitationProbability: 35,
+}, '2026-10-06T08:00:00Z', true);
+assert.equal(tomorrow.pm25, 44);
+assert.equal(tomorrow.pm10, 71);
+assert.equal(tomorrow.aqi, 92);
+assert.equal(tomorrow.temperature, 29.5);
+assert.equal(tomorrow.rainProbability, 35);
+assert(tomorrow.source.includes('Tomorrow.io realtime'));
+assert.equal(tomorrow.validAt, '2026-10-06T08:00:00Z');
+
+console.log('core optimizer, exposure and environmental mapping tests passed');
