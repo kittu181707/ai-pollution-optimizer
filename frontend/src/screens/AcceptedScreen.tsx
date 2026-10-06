@@ -9,9 +9,19 @@ function currentMinutes() {
   return now.getHours() * 60 + now.getMinutes();
 }
 
+function localDateToken() {
+  const now = new Date();
+  return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+}
+
 export function AcceptedScreen({ plan, onDone }: { plan: AcceptedPlan; onDone: () => void }) {
   const now = currentMinutes();
-  const next = plan.trips.find((trip) => timeToMinutes(trip.recommended.departureTime) >= now) || plan.trips.at(-1);
+  const today = localDateToken();
+  const next = plan.date > today
+    ? plan.trips[0]
+    : plan.date === today
+      ? plan.trips.find((trip) => timeToMinutes(trip.recommended.departureTime) >= now) || plan.trips.at(-1)
+      : undefined;
 
   const copy = async () => {
     if (!next || !navigator.clipboard) return;
