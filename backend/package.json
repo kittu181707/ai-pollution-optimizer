@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "ts-node local.ts"
   },
   "keywords": [],
   "author": "",
@@ -12,12 +13,20 @@
   "type": "commonjs",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1146.0",
+    "@aws-sdk/lib-dynamodb": "^3.1146.0",
+    "axios": "^1.20.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
     "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.164",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^26.6.4",
     "@types/uuid": "^10.0.0",
-    "typescript": "^7.0.2"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }

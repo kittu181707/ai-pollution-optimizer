@@ -18,42 +18,64 @@ Instead of simply showing users the current AQI, our application analyzes a user
 - **Eco Dashboard:** Personal tracker showing trips optimized, Eco points, and estimated CO2e avoided.
 - **Collective Impact:** Real-time (simulated for demo) view of Delhi's collective pollution savings.
 
+## Real External APIs Used
+- **Geocoding:** Nominatim (OpenStreetMap) API.
+- **Routing:** OSRM Public API (for Car, Walk, Cycle). Transit options are currently extrapolated/estimated based on road distance due to MVP constraints.
+- **Environmental Data:** Open-Meteo Air Quality & Weather API.
+- **Mapping:** React-Leaflet overlaying OpenStreetMap tiles.
+
 ## Architecture
-- **Frontend:** React, Vite, TypeScript, TailwindCSS v4
+- **Frontend:** React, Vite, TypeScript, TailwindCSS v4, Leaflet Map
 - **Backend (AWS):** API Gateway, AWS Lambda (NodeJS 20), DynamoDB
-- **Hosting:** AWS Amplify
+- **Database:** DynamoDB (`userId`, `tripId`, `timestamp`, etc.)
+- **Infrastructure:** AWS SAM (`template.yaml` provided)
+
+## Environment Variables
+- `VITE_API_BASE_URL` (Frontend): URL to your deployed API Gateway (or `http://localhost:3001` for local Express testing)
+- `DEMO_MODE` (Backend): Set to `'true'` to use simulated endpoints if APIs are down.
+- `TABLE_NAME` (Backend): Name of the DynamoDB table (default: `ai-pollution-optimizer-trips`)
 
 ## AWS Deployment
 1. Set up your AWS credentials locally.
 2. Ensure you have the AWS SAM CLI installed.
 3. Deploy the backend:
    ```bash
-   cd backend
    sam build
    sam deploy --guided
    ```
-4. Deploy the frontend to AWS Amplify:
-   - Connect the repository to AWS Amplify Console.
-   - Run `npm install && npm run build` as build commands.
+4. Deploy the frontend to AWS Amplify, providing the `VITE_API_BASE_URL` as an environment variable in the Amplify Console.
+
+## Local Testing
+To test the backend without AWS credentials, a local Express wrapper is provided.
+```bash
+cd backend
+npm install
+npm run start
+```
+Then run the frontend in a separate terminal:
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 ## How the Optimization Works (Deterministically)
 The optimization engine scores trips based on three normalized pillars:
 - `Exposure`
 - `Emissions`
 - `Travel Time`
-A deterministic algorithm weights these inputs based on user preference ("Lowest Pollution Exposure", "Lowest Emission", "Fastest", or "Balanced"). 
-*No LLM is used to fabricate numeric calculation. Numerical values remain rigorous and reproducible.*
+A deterministic algorithm in the AWS Lambda weights these inputs based on user preference ("Lowest Pollution Exposure", "Lowest Emission", "Fastest", or "Balanced"). 
 
-## Demo Mode
-In absence of real live Google Maps Routes and real-time CPCB API tokens (as this is a Hackathon MVP), a **Demo Mode** robustly mocks the environmental inputs for specific locations to demonstrate the full application lifecycle.
+## Important Scientific Distinction
+- **Estimated Exposure:** Calculated as `Live PM2.5 × Travel Time × Transport Exposure Factor`. It represents the pollution absorbed by the user.
+- **Estimated CO2e Emissions:** Calculated as `Distance × Transport CO2e Factor`. It represents the climate impact of the chosen transport mode.
 
 ## Cost Considerations
 This MVP is designed to stay 100% within AWS Free Tier credits:
 - Serverless Lambda runs only on invocation.
 - DynamoDB is configured to `PAY_PER_REQUEST`.
-- No always-on GPU / SageMaker endpoints.
+- Open-Meteo and OSRM APIs are free for moderate use.
 
-## Future Improvements
-- Integrate live CPCB pollution APIs.
-- Integrate Google Maps Routes API for precise live traffic and distance.
-- Add an optional AWS SageMaker prediction model for route planning an hour ahead.
+## Limitations & Future Improvements
+- OSRM does not support public transit routes natively, so transit distances are estimated.
+- Pollution interpolation is simplified to the origin node. A future improvement would sample PM2.5 at 1km intervals along the OSRM route geometry.

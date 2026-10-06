@@ -6,14 +6,20 @@ Description: >
 
 Globals:
   Function:
-    Timeout: 3
-    MemorySize: 128
+    Timeout: 10
+    MemorySize: 256
     Runtime: nodejs20.x
     Architectures:
       - x86_64
     Environment:
       Variables:
         TABLE_NAME: !Ref TripsTable
+        DEMO_MODE: 'false'
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,OPTIONS'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
 
 Resources:
   TripsTable:
@@ -46,6 +52,63 @@ Resources:
           Properties:
             Path: /api/optimize
             Method: post
+
+  EnvironmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/environment.handler
+      Events:
+        Environment:
+          Type: Api
+          Properties:
+            Path: /api/environment
+            Method: get
+
+  TripAcceptFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/trip.acceptHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TripsTable
+      Events:
+        TripAccept:
+          Type: Api
+          Properties:
+            Path: /api/trip/accept
+            Method: post
+
+  DashboardFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/dashboard.dashboardHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TripsTable
+      Events:
+        Dashboard:
+          Type: Api
+          Properties:
+            Path: /api/dashboard
+            Method: get
+
+  ImpactFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/dashboard.impactHandler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TripsTable
+      Events:
+        Impact:
+          Type: Api
+          Properties:
+            Path: /api/impact
+            Method: get
 
 Outputs:
   ApiEndpoint:
