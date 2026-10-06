@@ -12,6 +12,8 @@ import { LandingScreen } from './screens/LandingScreen';
 import { OverviewScreen } from './screens/OverviewScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { TravelScreen } from './screens/TravelScreen';
+import { ImpactScreen } from './screens/ImpactScreen';
+import { Map } from './components/Map';
 import type { AcceptedPlan, AgendaPayload, DayAnalysis, JourneyInput, TripAnalysis } from './types';
 import { deriveJourneys, getUserId, localDate, readStoredNumber, storeNumber } from './utils';
 
@@ -83,7 +85,13 @@ export default function App() {
   };
 
   const continueToTravel = () => {
-    setJourneys(deriveJourneys(agenda.events, agenda.homeLocation));
+    const newJourneys = deriveJourneys(agenda.events, agenda.homeLocation);
+    // Keep user's customizations if the structure matches
+    if (journeys.length === newJourneys.length && journeys.every((j, i) => j.origin === newJourneys[i].origin && j.destination === newJourneys[i].destination)) {
+      // Structure matches, do not overwrite
+    } else {
+      setJourneys(newJourneys);
+    }
     setStep('travel');
     setError(undefined);
   };
@@ -143,6 +151,7 @@ export default function App() {
 
   if (tab === 'history') return <><HistoryScreen plans={history} loading={historyLoading} onRefresh={refreshHistory}/><BottomNav active={tab} onChange={onNav}/></>;
   if (tab === 'settings') return <><SettingsScreen maxExtra={maxExtra} setMaxExtra={setMaxExtra}/><BottomNav active={tab} onChange={onNav}/></>;
+  if (tab === 'impact') return <><ImpactScreen /><BottomNav active={tab} onChange={onNav}/></>;
 
   let content;
   if (step === 'landing') content = <LandingScreen busy={busy} onImport={() => startAgenda('import')} onManual={() => startAgenda('manual')} onDemo={loadDemo}/>;
@@ -155,8 +164,21 @@ export default function App() {
   else if (step === 'accepted' && accepted) content = <AcceptedScreen plan={accepted} onDone={() => { setTab('today'); setStep('overview'); }}/>;
   else content = <LandingScreen busy={busy} onImport={() => startAgenda('import')} onManual={() => startAgenda('manual')} onDemo={loadDemo}/>;
 
+  const showMap = analysis && ['overview', 'changes', 'final', 'accepted'].includes(step);
+
   return <>
-    {content}
+    {isDemo && <div style={{background: 'var(--red)', color: 'white', padding: '6px', textAlign: 'center', fontSize: '12px', fontWeight: 'bold'}}>DEMO MODE ACTIVE</div>}
+    {showMap ? (
+      <div className="split-layout">
+        <div className="split-left">{content}</div>
+        <div className="split-right">
+          <Map trips={analysis.trips} />
+        </div>
+      </div>
+    ) : (
+      content
+    )}
+    
     {analysis && !['landing', 'import', 'manual', 'travel', 'analysis'].includes(step) && <BottomNav active={tab} onChange={onNav}/>}
     {whyTrip && <Drawer title="Why this changed" onClose={() => setWhyTrip(null)}>
       <div className="why-body">

@@ -1,6 +1,5 @@
 import { ArrowLeft, ArrowRight, Clock3, HelpCircle } from 'lucide-react';
 import type { DayAnalysis, TripAnalysis } from '../types';
-import { RoutePreview } from '../components/RoutePreview';
 import { shortTime } from '../utils';
 
 export function ChangesScreen({ analysis, onBack, onWhy, onFinal }: { analysis: DayAnalysis; onBack: () => void; onWhy: (trip: TripAnalysis) => void; onFinal: () => void }) {
@@ -9,7 +8,6 @@ export function ChangesScreen({ analysis, onBack, onWhy, onFinal }: { analysis: 
       <div className="change-heading"><div><span>Change {index + 1}</span><h2>{shortTime(trip.recommended.departureTime)} · {trip.origin} → {trip.destination}</h2></div><button className="text-button" onClick={() => onWhy(trip)}><HelpCircle/>Why?</button></div>
       <div className="compare-grid"><div><p>ORIGINAL</p><strong>{trip.original.label}</strong><span>{trip.original.travelMinutes} min</span><span>Exposure {trip.original.modeledExposure.toFixed(0)}</span></div><ArrowRight/><div className="recommended"><p>RECOMMENDED</p><strong>{trip.recommended.label}</strong><span>{trip.recommended.travelMinutes} min</span><span>Exposure {trip.recommended.modeledExposure.toFixed(0)}</span></div></div>
       <div className="change-impact"><Clock3/> {trip.recommended.travelMinutes - trip.original.travelMinutes >= 0 ? '+' : ''}{trip.recommended.travelMinutes - trip.original.travelMinutes} min <strong>{Math.max(0, Math.round((1 - trip.recommended.modeledExposure / Math.max(0.01, trip.original.modeledExposure)) * 100))}% lower modeled exposure</strong></div>
-      <RoutePreview trip={trip}/>
     </article>)}</div>
     <div className="sticky-actions"><button className="primary" onClick={onFinal}>Review final plan</button></div>
   </div>;
