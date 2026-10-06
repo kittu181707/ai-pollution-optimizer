@@ -1,14 +1,48 @@
-import { ArrowLeft, ArrowRight, Clock3, HelpCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Clock3, HelpCircle, Sparkles } from 'lucide-react';
 import type { DayAnalysis, TripAnalysis } from '../types';
+import { RoutePreview } from '../components/RoutePreview';
+import { ModeIcon } from '../components/ModeIcon';
 import { shortTime } from '../utils';
 
-export function ChangesScreen({ analysis, onBack, onWhy, onFinal }: { analysis: DayAnalysis; onBack: () => void; onWhy: (trip: TripAnalysis) => void; onFinal: () => void }) {
-  return <div className="screen wide"><button className="back" onClick={onBack}><ArrowLeft/>Overview</button><div className="screen-title"><p className="eyebrow">WHAT CHANGED</p><h1>{analysis.changes.length ? `${analysis.changes.length} focused change${analysis.changes.length === 1 ? '' : 's'}` : 'No change needed'}</h1><p>The optimizer only changes trips that improve the whole day within your time budget.</p></div>
-    <div className="change-list">{analysis.changes.map((trip, index) => <article className="change-card" key={trip.tripId}>
-      <div className="change-heading"><div><span>Change {index + 1}</span><h2>{shortTime(trip.recommended.departureTime)} · {trip.origin} → {trip.destination}</h2></div><button className="text-button" onClick={() => onWhy(trip)}><HelpCircle/>Why?</button></div>
-      <div className="compare-grid"><div><p>ORIGINAL</p><strong>{trip.original.label}</strong><span>{trip.original.travelMinutes} min</span><span>Exposure {trip.original.modeledExposure.toFixed(0)}</span></div><ArrowRight/><div className="recommended"><p>RECOMMENDED</p><strong>{trip.recommended.label}</strong><span>{trip.recommended.travelMinutes} min</span><span>Exposure {trip.recommended.modeledExposure.toFixed(0)}</span></div></div>
-      <div className="change-impact"><Clock3/> {trip.recommended.travelMinutes - trip.original.travelMinutes >= 0 ? '+' : ''}{trip.recommended.travelMinutes - trip.original.travelMinutes} min <strong>{Math.max(0, Math.round((1 - trip.recommended.modeledExposure / Math.max(0.01, trip.original.modeledExposure)) * 100))}% lower modeled exposure</strong></div>
-    </article>)}</div>
-    <div className="sticky-actions"><button className="primary" onClick={onFinal}>Review final plan</button></div>
+function reduction(trip: TripAnalysis) {
+  return Math.max(0, Math.round((1 - trip.recommended.pollutionExposure / Math.max(.01, trip.original.pollutionExposure)) * 100));
+}
+export function ChangesScreen({ analysis, onBack, onWhy, onFinal }: {
+  analysis: DayAnalysis; onBack: () => void; onWhy: (trip: TripAnalysis) => void; onFinal: () => void;
+}) {
+  return <div className="screen wide">
+    <div className="subnav"><button className="back compact" onClick={onBack}><ArrowLeft size={17}/>Result</button><span>{analysis.changes.length + ' change' + (analysis.changes.length === 1 ? '' : 's')}</span></div>
+    <div className="screen-title compact-title"><div className="eyebrow">WHAT CHANGED</div><h1>Small moves. Clear impact.</h1></div>
+    {!analysis.changes.length && <div className="no-change-card large"><Sparkles size={22}/><div><strong>Nothing worth changing.</strong><span>Your current plan stays intact.</span></div></div>}
+    <div className="change-list">
+      {analysis.changes.map((trip, index) => {
+        const extra = trip.recommended.travelMinutes - trip.original.travelMinutes;
+        return <article className="change-card" key={trip.tripId}>
+          <div className="change-heading">
+            <div><span>{'CHANGE ' + String(index + 1).padStart(2, '0')}</span><h2>{trip.origin} <ArrowRight size={15}/> {trip.destination}</h2></div>
+            <div className="impact-badge">{'−' + reduction(trip) + '%'}</div>
+          </div>
+          <div className="trip-swap">
+            <div className="trip-option current">
+              <span className="option-kicker">Current</span>
+              <div className="mode-title"><ModeIcon mode={trip.original.mode}/><strong>{trip.original.label}</strong></div>
+              <div className="option-meta"><span>{shortTime(trip.original.departureTime)}</span><span>{trip.original.travelMinutes + ' min'}</span><span>{'Pollution ' + trip.original.pollutionExposure.toFixed(0)}</span></div>
+            </div>
+            <ArrowRight className="swap-arrow" size={18}/>
+            <div className="trip-option recommended">
+              <span className="option-kicker">Recommended</span>
+              <div className="mode-title"><ModeIcon mode={trip.recommended.mode}/><strong>{trip.recommended.label}</strong></div>
+              <div className="option-meta"><span>{shortTime(trip.recommended.departureTime)}</span><span>{trip.recommended.travelMinutes + ' min'}</span><span>{'Pollution ' + trip.recommended.pollutionExposure.toFixed(0)}</span></div>
+            </div>
+          </div>
+          <div className="change-footer">
+            <span><Clock3 size={15}/>{(extra >= 0 ? '+' : '') + extra + ' min'}</span>
+            <button className="why-button" onClick={() => onWhy(trip)}><HelpCircle size={16}/>Why this?</button>
+          </div>
+          <RoutePreview planId={analysis.planId} trip={trip}/>
+        </article>;
+      })}
+    </div>
+    <div className="sticky-actions solid"><button className="primary cta" onClick={onFinal}>Review final plan<ArrowRight size={18}/></button></div>
   </div>;
 }

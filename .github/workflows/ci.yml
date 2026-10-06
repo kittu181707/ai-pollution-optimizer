@@ -11,10 +11,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Root workspace
+        run: |
+          npm ci --ignore-scripts
+          npm audit --audit-level=high
+          node -e "const root=require('./package.json'); const backend=require('./backend/package.json'); if(!backend.scripts?.dev || !root.scripts?.dev?.includes('npm run dev --prefix backend')) process.exit(1)"
       - name: Backend
         run: |
           cd backend
-          npm install
+          npm ci
           npm audit --audit-level=high
           npm run typecheck
           npm test
@@ -23,5 +28,7 @@ jobs:
           cd frontend
           npm install
           npm audit --audit-level=high
+          npm run test:ui
           npm run typecheck
           npm run build
+          test -z "$(git ls-files '*.tsbuildinfo')"

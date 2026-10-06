@@ -1,12 +1,41 @@
-import { CheckCircle2, Copy, ExternalLink } from 'lucide-react';
+import { Check, Copy, ExternalLink } from 'lucide-react';
 import type { AcceptedPlan } from '../types';
-import { shortTime } from '../utils';
+import { ModeIcon } from '../components/ModeIcon';
+import { shortTime, timeToMinutes } from '../utils';
+
+function currentMinutes() {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
 
 export function AcceptedScreen({ plan, onDone }: { plan: AcceptedPlan; onDone: () => void }) {
-  const next = plan.trips[0];
-  const copy = () => next && navigator.clipboard?.writeText(`${next.origin} → ${next.destination}\nLeave ${next.recommended.departureTime}\n${next.recommended.label}`);
-  return <div className="screen narrow accepted"><CheckCircle2 className="success-icon"/><p className="eyebrow">PLAN READY</p><h1>Your lower-exposure day is set.</h1>{next && <section className="next-trip"><span>Next trip</span><h2>{next.origin} → {next.destination}</h2><dl><div><dt>Leave</dt><dd>{shortTime(next.recommended.departureTime)}</dd></div><div><dt>Recommended</dt><dd>{next.recommended.label}</dd></div></dl></section>}
-    {next && <div className="two-actions"><button className="secondary" onClick={copy}><Copy/>Copy route</button><button className="secondary" onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(next.origin)}&destination=${encodeURIComponent(next.destination)}`, '_blank')}><ExternalLink/>Open route</button></div>}
+  const now = currentMinutes();
+  const next = plan.trips.find((trip) => timeToMinutes(trip.recommended.departureTime) >= now) || plan.trips.at(-1);
+
+  const copy = async () => {
+    if (!next || !navigator.clipboard) return;
+    const text = next.origin + ' → ' + next.destination + '\nLeave ' + next.recommended.departureTime + '\n' + next.recommended.label;
+    await navigator.clipboard.writeText(text).catch(() => undefined);
+  };
+
+  return <div className="screen narrow accepted">
+    <div className="success-ring"><Check size={28}/></div>
+    <div className="eyebrow">PLAN SAVED</div>
+    <h1>Ready for today.</h1>
+
+    {next && <section className="next-trip">
+      <div className="section-row"><strong>Next trip</strong><span>{shortTime(next.recommended.departureTime)}</span></div>
+      <div className="next-route"><strong>{next.origin}</strong><span>→</span><strong>{next.destination}</strong></div>
+      <div className="next-mode"><ModeIcon mode={next.recommended.mode}/><span>{next.recommended.label}</span></div>
+    </section>}
+
+    {next && <div className="two-actions">
+      <button className="secondary" onClick={copy}><Copy size={17}/>Copy</button>
+      <button className="secondary" onClick={() => window.open('https://www.google.com/maps/dir/?api=1&origin=' + encodeURIComponent(next.origin) + '&destination=' + encodeURIComponent(next.destination), '_blank', 'noopener,noreferrer')}>
+        <ExternalLink size={17}/>Open route
+      </button>
+    </div>}
+
     <button className="primary full" onClick={onDone}>Back to today</button>
   </div>;
 }

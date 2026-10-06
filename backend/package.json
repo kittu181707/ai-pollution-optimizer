@@ -1,12 +1,12 @@
 {
-  "name": "ai-pollution-optimizer-backend",
+  "name": "project-name-backend",
   "version": "0.2.0",
   "private": true,
   "type": "commonjs",
   "scripts": {
     "dev": "ts-node local.ts",
     "typecheck": "tsc --noEmit",
-    "test": "ts-node src/tests/core.test.ts && ts-node src/tests/stress.test.ts"
+    "test": "ts-node src/tests/core.test.ts && ts-node src/tests/stress.test.ts && ts-node src/tests/property.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.700.0",

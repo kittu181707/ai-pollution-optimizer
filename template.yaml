@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: AI Personal Pollution Optimizer whole-day environmental exposure optimizer
+Description: PROJECT_NAME whole-day environmental exposure optimizer
 
 Parameters:
   DemoMode:
@@ -52,6 +52,11 @@ Resources:
         AttributeName: expiresAt
         Enabled: true
 
+  WorkflowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+
   PrepareFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -63,7 +68,7 @@ Resources:
     Properties:
       CodeUri: backend/
       Handler: src/handlers/optimize.handler
-      Timeout: 60
+      Timeout: 90
       MemorySize: 768
       Policies:
         - Statement:
@@ -86,6 +91,12 @@ Resources:
     Type: AWS::Serverless::StateMachine
     Properties:
       Type: EXPRESS
+      Logging:
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt WorkflowLogGroup.Arn
+        IncludeExecutionData: true
+        Level: ALL
       Definition:
         StartAt: Prepare
         States:
@@ -108,6 +119,18 @@ Resources:
             FunctionName: !Ref OptimizeFunction
         - LambdaInvokePolicy:
             FunctionName: !Ref PersistFunction
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogDelivery
+                - logs:GetLogDelivery
+                - logs:UpdateLogDelivery
+                - logs:DeleteLogDelivery
+                - logs:ListLogDeliveries
+                - logs:PutResourcePolicy
+                - logs:DescribeResourcePolicies
+                - logs:DescribeLogGroups
+              Resource: '*'
 
   AnalyzeApiFunction:
     Type: AWS::Serverless::Function
@@ -183,6 +206,28 @@ Resources:
           Properties:
             Path: /api/history
             Method: get
+
+  MapFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/map.handler
+      Timeout: 15
+      MemorySize: 768
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PlansTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - geo-maps:GetStaticMap
+              Resource: '*'
+      Events:
+        StaticMap:
+          Type: Api
+          Properties:
+            Path: /api/map/static
+            Method: post
 
   ExplainFunction:
     Type: AWS::Serverless::Function
