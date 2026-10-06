@@ -39,6 +39,7 @@ export function RoutePreview({ planId, trip }: { planId: string; trip: TripAnaly
   useEffect(() => {
     let active = true;
     setMapImage(null);
+    setMapSource('Route geometry preview');
     void api.routeMap(planId, trip).then((result) => {
       if (!active) return;
       setMapImage(result.imageDataUrl);
