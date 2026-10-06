@@ -1,6 +1,5 @@
 import { strict as assert } from 'node:assert';
 import { handler as prepare } from '../handlers/prepare';
-import { parseIcs } from '../core/ics';
 import { isValidTime, timeToMinutes } from '../core/time';
 import { optimizeCandidateSets } from '../core/optimizer';
 import type { RouteCandidate, TripCandidateSet } from '../types';
@@ -55,27 +54,6 @@ async function main() {
   assert.equal(isValidTime('23:59'), true);
   assert.equal(isValidTime('24:00'), false);
   assert.throws(() => timeToMinutes('9:00'));
-
-  const ics = parseIcs([
-    'BEGIN:VCALENDAR',
-    'BEGIN:VEVENT',
-    'UID:all-day',
-    'DTSTART;VALUE=DATE:20261006',
-    'SUMMARY:Holiday',
-    'END:VEVENT',
-    'BEGIN:VEVENT',
-    'UID:timed',
-    'DTSTART:20261006T090000',
-    'DTEND:20261006T100000',
-    'SUMMARY:Meeting',
-    'LOCATION:Office',
-    'END:VEVENT',
-    'END:VCALENDAR',
-  ].join('\r\n'));
-  if (ics.date === '2026-10-06') {
-    assert.equal(ics.events.length, 1);
-    assert.equal(ics.events[0].title, 'Meeting');
-  }
 
   await assert.rejects(
     () => prepare({

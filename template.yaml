@@ -130,29 +130,7 @@ Resources:
             Path: /api/day/analyze
             Method: post
 
-  IcsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: backend/
-      Handler: src/handlers/ics.handler
-      Events:
-        ImportIcs:
-          Type: Api
-          Properties:
-            Path: /api/ics/parse
-            Method: post
 
-  DemoFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: backend/
-      Handler: src/handlers/demo.handler
-      Events:
-        Demo:
-          Type: Api
-          Properties:
-            Path: /api/demo/day
-            Method: get
 
   AcceptFunction:
     Type: AWS::Serverless::Function

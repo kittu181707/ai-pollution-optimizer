@@ -25,7 +25,6 @@ export interface AnalyzeDayRequest {
   events: CalendarEvent[];
   journeys: JourneyInput[];
   maxExtraMinutes: number;
-  demoMode?: boolean;
 }
 
 export interface Coordinates { lat: number; lon: number }

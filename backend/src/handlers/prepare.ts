@@ -22,7 +22,7 @@ export const handler = async (input: AnalyzeDayRequest): Promise<PreparedRequest
   const userId = clean(input.userId, 'User ID', 128);
   const homeLocation = clean(input.homeLocation, 'Home location');
 
-  if (!Array.isArray(input.events) || input.events.length < 1) throw new Error('At least one event is required');
+  if (!Array.isArray(input.events)) throw new Error('Events array is required');
   if (input.events.length > MAX_EVENTS) throw new Error(`A maximum of ${MAX_EVENTS} events is supported per day`);
   if (!Array.isArray(input.journeys) || input.journeys.length < 1) throw new Error('At least one journey is required');
   if (input.journeys.length > MAX_JOURNEYS) throw new Error(`A maximum of ${MAX_JOURNEYS} journeys is supported per day`);
