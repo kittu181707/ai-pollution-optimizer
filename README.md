@@ -1,8 +1,8 @@
-# PROJECT_NAME
+# ClearRoute
 
 Whole-day personal environmental exposure optimizer. Import a fixed day, confirm travel, and let AWS find the smallest realistic route/mode/timing change that reduces modeled pollution exposure without moving appointments.
 
-> Branding is intentionally a placeholder. Set `VITE_PRODUCT_NAME` when the final name is chosen.
+> The product ships as **ClearRoute** by default; set `VITE_PRODUCT_NAME` to override the display name for a deployment.
 
 ## Product focus
 
