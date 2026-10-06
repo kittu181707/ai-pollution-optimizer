@@ -7,7 +7,7 @@ export function FinalPlanScreen({ analysis, onBack, onAccept, busy, error }: {
   analysis: DayAnalysis; onBack: () => void; onAccept: () => void; busy: boolean; error?: string;
 }) {
   return <div className="screen narrow">
-    <div className="subnav"><button className="back compact" onClick={onBack}><ArrowLeft size={17}/>Changes</button><span>Final plan</span></div>
+    <div className="subnav"><button className="back compact" onClick={onBack}><ArrowLeft size={17}/>Today</button><span>Final plan</span></div>
     <div className="screen-title compact-title"><div className="eyebrow">READY</div><h1>Your optimized day.</h1></div>
     <div className="plan-summary">
       <div><strong>{'−' + analysis.metrics.pollutionReductionPct + '%'}</strong><span>modeled pollution</span></div>

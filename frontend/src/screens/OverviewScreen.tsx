@@ -1,105 +1,165 @@
-import { ArrowDown, ArrowRight, CalendarCheck, Clock3, Sparkles, Sun, ThermometerSun } from 'lucide-react';
+import { ArrowRight, CalendarCheck, Check, Clock3, HelpCircle, Sparkles } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import type { DayAnalysis, TripAnalysis } from '../types';
-import { Brand } from '../components/Brand';
 import { EnvironmentalSnapshot } from '../components/EnvironmentalSnapshot';
+import { ModeIcon } from '../components/ModeIcon';
+import { RoutePreview } from '../components/RoutePreview';
+import { shortTime } from '../utils';
 
-function percentDown(before: number, after: number) {
-  return before > 0 ? Math.max(0, Math.round((1 - after / before) * 100)) : 0;
-}
-function count(value: number) {
-  return value >= Number.MAX_SAFE_INTEGER ? 'Very large' : new Intl.NumberFormat().format(value);
-}
-function pollutionReduction(trip: TripAnalysis) {
-  return Math.max(0, trip.original.pollutionExposure - trip.recommended.pollutionExposure);
-}
-function tripReductionPct(trip: TripAnalysis) {
-  return trip.original.pollutionExposure > 0
-    ? Math.max(0, Math.round((1 - trip.recommended.pollutionExposure / trip.original.pollutionExposure) * 100))
-    : 0;
+function reductionPct(trip: TripAnalysis) {
+  if (trip.original.pollutionExposure <= 0) return 0;
+  return Math.max(0, Math.round((1 - trip.recommended.pollutionExposure / trip.original.pollutionExposure) * 100));
 }
 
-export function OverviewScreen({ analysis, onChanges, onKeep }: { analysis: DayAnalysis; onChanges: () => void; onKeep: () => void }) {
+function formatDate(value: string) {
+  const date = new Date(value + 'T12:00:00');
+  return new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).format(date);
+}
+
+function runtime(ms: number) {
+  return ms > 0 ? Math.max(.1, ms / 1000).toFixed(1) + 's' : '—';
+}
+
+export function OverviewScreen({ analysis, onWhy, onPlan, onReset }: {
+  analysis: DayAnalysis;
+  onWhy: (trip: TripAnalysis) => void;
+  onPlan: () => void;
+  onReset: () => void;
+}) {
+  const dominant = useMemo(() => {
+    const changed = [...analysis.changes].sort((a, b) =>
+      (b.original.pollutionExposure - b.recommended.pollutionExposure)
+      - (a.original.pollutionExposure - a.recommended.pollutionExposure)
+    );
+    return changed[0] || analysis.trips[0];
+  }, [analysis]);
+
+  const [selectedId, setSelectedId] = useState(dominant?.tripId || '');
+  const selected = analysis.trips.find((trip) => trip.tripId === selectedId) || dominant;
   const metrics = analysis.metrics;
-  const uvReduction = percentDown(metrics.originalHighUvMinutes, metrics.optimizedHighUvMinutes);
-  const heatReduction = percentDown(metrics.originalHeatRiskMinutes, metrics.optimizedHeatRiskMinutes);
-  const ranked = [...analysis.changes].sort((a, b) => pollutionReduction(b) - pollutionReduction(a));
-  const dominant = ranked[0];
-  const totalReduction = ranked.reduce((sum, trip) => sum + pollutionReduction(trip), 0);
-  const dominantShare = dominant && totalReduction > 0 ? Math.round(pollutionReduction(dominant) / totalReduction * 100) : 0;
-  const runtime = analysis.workflow.analysisDurationMs > 0
-    ? Math.max(.1, analysis.workflow.analysisDurationMs / 1000).toFixed(1) + 's'
-    : '—';
 
-  return <div className="screen wide result-screen">
-    <div className="result-top">
-      <Brand/>
-      <div className="status-pill"><CalendarCheck size={15}/>Appointments kept</div>
-    </div>
-
-    <div className="screen-title result-title">
-      <div className="eyebrow">WHOLE DAY OPTIMIZED</div>
-      <h1>Less exposure. Same day.</h1>
-      <div className="screen-hint">{analysis.changes.length ? analysis.changes.length + ' useful change' + (analysis.changes.length === 1 ? '' : 's') : 'No useful change needed'}</div>
-    </div>
-
-    <section className="exposure-hero" aria-label="Modeled pollution exposure index">
-      <div className="exposure-side">
-        <span>Original</span>
-        <strong>100</strong>
+  return <div className="screen dashboard-screen">
+    <header className="dashboard-header">
+      <div>
+        <span className="section-kicker">Today</span>
+        <h1>{formatDate(analysis.date)}</h1>
       </div>
-      <ArrowRight className="exposure-arrow" size={24}/>
-      <div className="exposure-side optimized">
-        <span>Optimized</span>
-        <strong>{metrics.optimizedExposureIndex}</strong>
+      <button className="quiet-action dashboard-reset" onClick={onReset}>New day</button>
+    </header>
+
+    <section className="decision-summary" aria-label="Optimization result">
+      <div className="decision-primary">
+        <span>Modeled pollution exposure</span>
+        <strong>−{metrics.pollutionReductionPct}%</strong>
+        <small>100 → {metrics.optimizedExposureIndex}</small>
       </div>
-      <div className="exposure-delta"><ArrowDown size={15}/>{metrics.pollutionReductionPct}% <small>modeled pollution</small></div>
+      <div className="decision-stat">
+        <CalendarCheck size={18}/>
+        <strong>{metrics.appointmentsChanged}</strong>
+        <span>appointments moved</span>
+      </div>
+      <div className="decision-stat">
+        <Clock3 size={18}/>
+        <strong>+{metrics.extraTravelMinutes}</strong>
+        <span>minutes today</span>
+      </div>
+      <div className="decision-stat">
+        <Sparkles size={18}/>
+        <strong>{analysis.changes.length}</strong>
+        <span>useful change{analysis.changes.length === 1 ? '' : 's'}</span>
+      </div>
     </section>
 
-    {dominant && <section className="focus-finding">
-      <div className="focus-finding-icon"><Sparkles size={20}/></div>
-      <div>
-        <div className="eyebrow">BEST ACTION</div>
-        <h3>{dominant.origin} → {dominant.destination}</h3>
-        <p>{dominantShare}% of the selected pollution reduction comes from this journey. Keep every appointment; change only what matters.</p>
-      </div>
-      <strong>−{tripReductionPct(dominant)}%</strong>
-    </section>}
+    <div className="dashboard-grid">
+      <section className="dashboard-card journeys-card">
+        <div className="card-heading">
+          <div>
+            <span className="section-kicker">Schedule</span>
+            <h2>Today's journeys</h2>
+          </div>
+          <span className="card-count">{analysis.trips.length}</span>
+        </div>
 
-    <div className="metric-grid">
-      <div><CalendarCheck size={19}/><span>Appointments</span><strong>{metrics.appointmentsChanged === 0 ? 'No changes' : metrics.appointmentsChanged}</strong></div>
-      <div><Clock3 size={19}/><span>Extra travel</span><strong>{'+' + metrics.extraTravelMinutes + ' min'}</strong></div>
-      <div><Sun size={19}/><span>High UV</span><strong>{uvReduction ? '−' + uvReduction + '%' : 'No increase'}</strong></div>
-      <div><ThermometerSun size={19}/><span>Heat exposure</span><strong>{heatReduction ? '−' + heatReduction + '%' : 'No increase'}</strong></div>
+        <div className="journey-timeline">
+          {analysis.trips.map((trip) => {
+            const active = selected?.tripId === trip.tripId;
+            return <button
+              key={trip.tripId}
+              className={'journey-row' + (active ? ' active' : '')}
+              onClick={() => setSelectedId(trip.tripId)}
+              aria-pressed={active}
+            >
+              <span className={'journey-dot' + (trip.changed ? ' changed' : '')}/>
+              <span className="journey-time">{shortTime(trip.recommended.departureTime)}</span>
+              <span className="journey-copy">
+                <strong>{trip.origin} → {trip.destination}</strong>
+                <small><ModeIcon mode={trip.recommended.mode} size={13}/>{trip.recommended.label} · {trip.recommended.travelMinutes} min</small>
+              </span>
+              <span className={trip.changed ? 'journey-state changed' : 'journey-state'}>
+                {trip.changed ? 'Changed' : <Check size={14}/>}
+              </span>
+            </button>;
+          })}
+        </div>
+      </section>
+
+      {selected && <section className="dashboard-card focus-card">
+        <div className="card-heading">
+          <div>
+            <span className="section-kicker">{selected.changed ? 'Best change' : 'Journey'}</span>
+            <h2>{selected.origin} → {selected.destination}</h2>
+          </div>
+          {selected.changed && <span className="reduction-pill">−{reductionPct(selected)}%</span>}
+        </div>
+
+        <div className="route-choice">
+          <div>
+            <span>Current</span>
+            <strong><ModeIcon mode={selected.original.mode} size={16}/>{selected.original.label}</strong>
+            <small>{selected.original.travelMinutes} min · exposure {selected.original.pollutionExposure.toFixed(0)}</small>
+          </div>
+          <ArrowRight size={17}/>
+          <div className={selected.changed ? 'recommended' : ''}>
+            <span>{selected.changed ? 'Recommended' : 'Best feasible'}</span>
+            <strong><ModeIcon mode={selected.recommended.mode} size={16}/>{selected.recommended.label}</strong>
+            <small>{selected.recommended.travelMinutes} min · exposure {selected.recommended.pollutionExposure.toFixed(0)}</small>
+          </div>
+        </div>
+
+        <RoutePreview planId={analysis.planId} trip={selected}/>
+
+        {selected.changed && <div className="focus-actions">
+          <button className="secondary" onClick={() => onWhy(selected)}><HelpCircle size={16}/>Why this change?</button>
+          <button className="primary" onClick={onPlan}>Review plan<ArrowRight size={16}/></button>
+        </div>}
+        {!selected.changed && <div className="kept-note"><Check size={16}/>No useful change beats your current trip.</div>}
+      </section>}
     </div>
 
-    <EnvironmentalSnapshot analysis={analysis}/>
+    <div className="dashboard-lower">
+      <EnvironmentalSnapshot analysis={analysis}/>
 
-    <section className="aws-proof">
-      <div>
-        <div className="eyebrow">AWS OPTIMIZATION</div>
-        <h3>Whole-day route search completed</h3>
-        <p>Amazon Location route candidates and route-sampled environmental data were ranked under your appointment and whole-day time constraints.</p>
-      </div>
-      <dl>
-        <div><dt>Routes</dt><dd>{count(analysis.workflow.routesEvaluated)}</dd></div>
-        <div><dt>Plans</dt><dd>{count(analysis.workflow.dayPlansTested)}</dd></div>
-        <div><dt>Samples</dt><dd>{count(analysis.workflow.environmentalSamples)}</dd></div>
-        <div><dt>Runtime</dt><dd>{runtime}</dd></div>
-      </dl>
-    </section>
+      <section className="dashboard-card proof-card" aria-label="Analysis execution">
+        <div className="card-heading compact">
+          <div>
+            <span className="section-kicker">Analysis</span>
+            <h2>What the engine checked</h2>
+          </div>
+        </div>
+        <div className="proof-grid">
+          <div><strong>{analysis.workflow.routesEvaluated}</strong><span>routes</span></div>
+          <div><strong>{analysis.workflow.dayPlansTested >= Number.MAX_SAFE_INTEGER ? '9Q+' : analysis.workflow.dayPlansTested.toLocaleString()}</strong><span>day plans</span></div>
+          <div><strong>{analysis.workflow.environmentalSamples}</strong><span>samples</span></div>
+          <div><strong>{runtime(analysis.workflow.analysisDurationMs)}</strong><span>runtime</span></div>
+        </div>
+        <details className="proof-sources">
+          <summary>Data sources</summary>
+          <span>{analysis.workflow.routeSource}</span>
+          <span>{analysis.workflow.environmentSource}</span>
+        </details>
+      </section>
+    </div>
 
-    {analysis.changes.length > 0 ? <div className="result-actions">
-      <button className="primary cta" onClick={onChanges}>See what changed<ArrowRight size={18}/></button>
-      <button className="secondary" onClick={onKeep}>Keep current day</button>
-    </div> : <>
-      <div className="no-change-card"><CalendarCheck size={20}/><div><strong>Your current day is already the best feasible plan.</strong><span>No useful pollution reduction cleared the threshold.</span></div></div>
-      <button className="quiet-action" onClick={onKeep}>Start over</button>
-    </>}
-
-    <details className="tech-details">
-      <summary>Verified data sources</summary>
-      <div className="source-line">{analysis.workflow.routeSource}</div>
-      <div className="source-line">{analysis.workflow.environmentSource}</div>
-    </details>
+    {!analysis.changes.length && <button className="primary dashboard-plan-button" onClick={onPlan}>View today's plan<ArrowRight size={16}/></button>}
   </div>;
 }
