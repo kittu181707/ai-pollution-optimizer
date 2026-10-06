@@ -1,0 +1,53 @@
+.route-map-stage {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #f7f7f3;
+}
+.route-map-stage img {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 180px;
+  object-fit: cover;
+}
+.route-compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  border-top: 1px solid var(--line);
+  background: var(--line);
+}
+.route-compare-grid > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  background: var(--surface);
+}
+.route-compare-grid > div.recommended { background: var(--green-soft); }
+.route-compare-grid span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.route-compare-grid strong { font-size: 21px; }
+.route-compare-grid small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.route-legend .map-source {
+  margin-left: auto;
+  max-width: 48%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-2);
+}
+@media (max-width: 520px) {
+  .route-compare-grid { grid-template-columns: 1fr; }
+  .route-legend .map-source { display: none; }
+}
