@@ -6,6 +6,9 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ap-south-1
+      AWS_DEFAULT_REGION: ap-south-1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
