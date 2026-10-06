@@ -16,8 +16,10 @@ export async function routesForTrip(input: {
   date: string;
   departureTime: string;
   arriveBy?: string;
+  demoMode: boolean;
   tripOrdinal: number;
 }): Promise<BaseRoute[]> {
+  if (input.demoMode) return demoRoutes(input);
   if (input.mode === 'bike') return [bikeHeuristic(input.origin, input.destination)];
 
   const { CalculateRoutesCommand } = await import('@aws-sdk/client-geo-routes');
@@ -74,6 +76,44 @@ function departureIso(date: string, time: string) {
   const offset = process.env.APP_TIMEZONE_OFFSET || '+05:30';
   if (offset !== 'Z' && !/^[+-](?:0\d|1\d|2[0-3]):[0-5]\d$/.test(offset)) throw new Error('Invalid APP_TIMEZONE_OFFSET');
   return `${date}T${time}:00${offset}`;
+}
+
+function demoRoutes(input: {
+  origin: Coordinates;
+  destination: Coordinates;
+  mode: TransportMode;
+  departureTime: string;
+  tripOrdinal: number;
+}) {
+  const baseDistance = Math.max(2, haversine(input.origin, input.destination) * 1.18);
+  const speeds: Record<TransportMode, number> = { car: 28, bike: 15, bus: 23, metro: 31, walk: 4.8 };
+  const modifiers: Record<TransportMode, number> = { car: 1, bike: 1.08, bus: 1.12, metro: 1.15, walk: 1.02 };
+  let minutes = Math.round(baseDistance * modifiers[input.mode] / speeds[input.mode] * 60);
+  if (input.mode === 'metro') minutes += 7;
+  if (input.mode === 'bus') minutes += 6;
+  if (input.tripOrdinal === 2 && input.mode === 'car') minutes += 9;
+  if (input.tripOrdinal === 3 && input.mode === 'car') minutes += 14;
+
+  const base = {
+    routeId: `demo-${input.mode}-0`,
+    mode: input.mode,
+    label: label(input.mode),
+    travelMinutes: minutes,
+    distanceKm: round(baseDistance * modifiers[input.mode]),
+    geometry: bend(input.origin, input.destination, input.mode === 'car' ? 0.015 : -0.01),
+    source: 'Controlled demo route data',
+  };
+
+  return input.mode === 'car'
+    ? [base, {
+      ...base,
+      routeId: `demo-${input.mode}-1`,
+      label: 'Car · alternate road',
+      travelMinutes: minutes + 5,
+      distanceKm: round(base.distanceKm * 1.08),
+      geometry: bend(input.origin, input.destination, -0.02),
+    }]
+    : [base];
 }
 
 function bikeHeuristic(origin: Coordinates, destination: Coordinates): BaseRoute {

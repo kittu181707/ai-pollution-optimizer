@@ -5,8 +5,11 @@ const cache = new Map<string, EnvironmentSnapshot>();
 export async function environmentAt(
   position: Coordinates,
   date: string,
-  departureTime: string
+  departureTime: string,
+  demoMode: boolean,
 ): Promise<EnvironmentSnapshot> {
+  if (demoMode) return demoEnvironment(departureTime);
+
   const hour = departureTime.slice(0, 2);
   const key = `${position.lat.toFixed(3)},${position.lon.toFixed(3)}|${date}T${hour}`;
   const cached = cache.get(key);
@@ -31,6 +34,15 @@ export async function environmentAt(
 
   cache.set(key, result);
   return result;
+}
+
+function demoEnvironment(time: string): EnvironmentSnapshot {
+  const [hour, minute] = time.split(':').map(Number);
+  const total = hour * 60 + minute;
+  if (total < 660) return { pm25: 148, pm10: 192, aqi: 186, temperature: 25, uvIndex: 2, rainProbability: 5, source: 'Controlled demo environmental data' };
+  if (total < 1020) return { pm25: 82, pm10: 126, aqi: 121, temperature: 38, uvIndex: 8.2, rainProbability: 8, source: 'Controlled demo environmental data' };
+  if (total < 1200) return { pm25: 176, pm10: 236, aqi: 214, temperature: 31, uvIndex: 2.8, rainProbability: 25, source: 'Controlled demo environmental data' };
+  return { pm25: 118, pm10: 170, aqi: 158, temperature: 27, uvIndex: 0.2, rainProbability: 72, source: 'Controlled demo environmental data' };
 }
 
 async function fetchJson(url: string) {

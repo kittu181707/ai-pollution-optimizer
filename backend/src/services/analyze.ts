@@ -24,6 +24,7 @@ type RouteJob = {
 };
 
 export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayRequest) {
+  const demoMode = input.demoMode ?? process.env.DEMO_MODE === 'true';
   const sets: TripCandidateSet[] = [];
   const environmentSources = new Set<string>();
   const routeSources = new Set<string>();
@@ -31,8 +32,8 @@ export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayReque
   for (let index = 0; index < input.journeys.length; index += 1) {
     const journey = input.journeys[index];
     const [origin, destination] = await Promise.all([
-      geocode(journey.origin),
-      geocode(journey.destination),
+      geocode(journey.origin, demoMode),
+      geocode(journey.destination, demoMode),
     ]);
 
     const earliestDeparture = earliestDepartureForJourney(input.events, journey.origin, journey.destination, journey.arriveBy);
@@ -57,6 +58,7 @@ export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayReque
         date: input.date,
         departureTime: job.departureTime,
         arriveBy: journey.arriveBy,
+        demoMode,
         tripOrdinal: index,
       });
       return { job, routes };
@@ -91,7 +93,7 @@ export async function runDirectAnalysis(input: PreparedRequest | AnalyzeDayReque
     if (!originalRoute) throw new Error(`Original ${journey.mode} trip cannot arrive by its fixed appointment`);
 
     const scored = await Promise.all(routeCandidates.map(async ({ route, job }) => {
-      const environment = await environmentAt(routePoint(route.geometry, origin, destination), input.date, job.departureTime);
+      const environment = await environmentAt(routePoint(route.geometry, origin, destination), input.date, job.departureTime, demoMode);
       environmentSources.add(environment.source);
       return scoreRoute({
         candidateId: `${journey.tripId}-${route.routeId}-${job.shift}`,

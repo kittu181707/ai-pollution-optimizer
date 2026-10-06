@@ -2,7 +2,7 @@ export type TransportMode = 'car' | 'bike' | 'bus' | 'metro' | 'walk';
 export interface CalendarEvent { eventId:string; title:string; location:string; start:string; end:string; fixed:boolean }
 export interface JourneyInput { tripId:string; origin:string; destination:string; departureTime:string; arriveBy?:string; mode:TransportMode }
 export interface AgendaPayload { date:string; homeLocation:string; events:CalendarEvent[] }
-export interface AnalyzeDayRequest extends AgendaPayload { userId:string; journeys:JourneyInput[]; maxExtraMinutes:number }
+export interface AnalyzeDayRequest extends AgendaPayload { userId:string; journeys:JourneyInput[]; maxExtraMinutes:number; demoMode?:boolean }
 export interface Coordinates { lat:number; lon:number }
 export interface EnvironmentSnapshot { pm25:number; pm10:number; aqi:number; temperature:number; uvIndex:number; rainProbability:number; source:string }
 export interface RouteCandidate { candidateId:string; tripId:string; mode:TransportMode; label:string; departureTime:string; shiftMinutes:number; travelMinutes:number; distanceKm:number; modeledExposure:number; pollutionExposure:number; highUvOutdoorMinutes:number; heatRiskOutdoorMinutes:number; estimatedCo2eKg:number; environment:EnvironmentSnapshot; geometry:Coordinates[]; source:string }

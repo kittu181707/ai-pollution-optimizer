@@ -22,6 +22,8 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = 15_000):
 }
 
 export const api = {
+  getDemoDay: () => request<AgendaPayload>('/api/demo/day'),
+  parseIcs: (icsText: string) => request<AgendaPayload>('/api/ics/parse', { method: 'POST', body: JSON.stringify({ icsText }) }, 20_000),
   analyzeDay: (payload: AnalyzeDayRequest) => request<DayAnalysis>('/api/day/analyze', { method: 'POST', body: JSON.stringify(payload) }, 75_000),
   acceptPlan: (userId: string, planId: string) => request<AcceptedPlan>('/api/plan/accept', { method: 'POST', body: JSON.stringify({ userId, planId }) }),
   history: (userId: string) => request<{ plans: AcceptedPlan[] }>(`/api/history?userId=${encodeURIComponent(userId)}`),
