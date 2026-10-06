@@ -64,19 +64,17 @@ Deploy `frontend/` to Amplify and set `VITE_API_BASE_URL` to the SAM `ApiEndpoin
 
 The deployed UI uses **Amazon Location Maps V2** as the map data source, with the AWS-recommended MapLibre renderer. The map requests the Amazon Standard style with live traffic enabled and overlays the exact route geometries already evaluated by the optimizer.
 
-The SAM stack creates a public **map-only** Amazon Location API key. After deployment, get the key name from the `LiveMapApiKeyName` stack output, retrieve its public value, and set these Amplify environment variables:
+The SAM stack creates a public **map-only** Amazon Location API key and exposes it through the backend's `/api/config` endpoint. The frontend discovers that configuration automatically at runtime, so there is no manual map-key copy step and no rebuild is required when the key changes.
+
+MapLibre is bundled into the frontend build rather than loaded from a third-party CDN. This removes a runtime dependency and makes map rendering more reliable.
+
+For Amplify, the only required frontend connection setting is:
 
 ```bash
-VITE_AWS_REGION=ap-south-1
-VITE_AMAZON_LOCATION_API_KEY=<public Amazon Location map key>
-VITE_AMAZON_LOCATION_MAP_STYLE=Standard
+VITE_API_BASE_URL=<SAM ApiEndpoint output>
 ```
 
-Retrieve the public key value with:
-
-```bash
-aws location describe-key --key-name <LiveMapApiKeyName> --query Key --output text
-```
+`VITE_AWS_REGION`, `VITE_AMAZON_LOCATION_MAP_STYLE`, and `VITE_AMAZON_LOCATION_API_KEY` remain optional development/override settings.
 
 For production, deploy the stack with `MapAllowedReferer` set to the actual Amplify/site URL instead of `*`. The browser key is restricted to Amazon Location map rendering and cannot call the optimizer or routing APIs.
 
