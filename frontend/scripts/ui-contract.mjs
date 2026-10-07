@@ -13,6 +13,7 @@ const today = read('src/screens/TodayScreen.tsx');
 const liveSnapshot = read('src/components/LiveEnvironmentSnapshot.tsx');
 const travel = read('src/screens/TravelScreen.tsx');
 const accepted = read('src/screens/AcceptedScreen.tsx');
+const india = read('src/screens/IndiaScreen.tsx');
 const api = read('src/api.ts');
 const pkg = read('package.json');
 
@@ -23,6 +24,8 @@ assert(map.includes('api.runtimeConfig'), 'map key must be auto-discovered at ru
 assert(map.includes('MapFallback'), 'map must preserve a no-blank fallback');
 assert(!map.includes('cartocdn') && !map.includes('react-leaflet') && !map.includes('TileLayer'), 'third-party map tiles must not return');
 assert(pkg.includes('maplibre-gl') && !pkg.includes('"leaflet"') && !pkg.includes('"react-leaflet"'), 'AWS-recommended renderer dependency contract changed');
+assert(india.includes('maps.geo.') && india.includes("traffic: 'All'"), 'India map must also use Amazon Location Maps V2');
+assert(!india.includes('react-leaflet') && !india.includes('cartocdn'), 'India view must not reintroduce third-party map tiles');
 
 assert(today.includes('LiveEnvironmentSnapshot'), 'today screen must use real environmental data instead of hardcoded values');
 assert(!today.includes('<strong>86</strong>') && !today.includes('Source: CPCB • Updated 4 min ago'), 'fake environmental snapshot must not return');
