@@ -6,6 +6,8 @@ import { handler as ics } from "./src/handlers/ics";
 import { handler as demo } from "./src/handlers/demo";
 import { handler as explain } from "./src/handlers/explain";
 import { handler as india } from "./src/handlers/india";
+import { handler as environmentCurrent } from "./src/handlers/environment-current";
+import { handler as runtimeConfig } from "./src/handlers/runtime-config";
 import { runDirectAnalysis } from "./src/services/analyze";
 import { handler as prepare } from "./src/handlers/prepare";
 process.env.LOCAL_MODE = "true";
@@ -69,6 +71,12 @@ app.post("/api/explain", async (req, res) =>
 );
 app.get("/api/india", async (req, res) =>
   send(res, await india()),
+);
+app.post("/api/environment/current", async (req, res) =>
+  send(res, await environmentCurrent(event(req))),
+);
+app.get("/api/runtime-config", async (req, res) =>
+  send(res, await runtimeConfig(event(req))),
 );
 app.listen(3001, () => console.log("Local backend on http://localhost:3001"));
 setInterval(() => {}, 1000 * 60 * 60);
