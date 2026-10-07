@@ -1,46 +1,97 @@
 # AI Personal Pollution Optimizer
 
-Make every journey healthier, without changing your day. Whole-day personal environmental exposure optimizer. The app imports a user's agenda, confirms travel, evaluates route/timing alternatives on AWS, and recommends the smallest realistic changes that reduce modeled pollution, heat, UV and weather exposure without moving fixed appointments.
+A whole-day environmental exposure optimizer that keeps fixed appointments intact while finding practical route, mode, and timing changes with lower modeled pollution exposure.
 
-## Implemented
+## Production stack
 
-- Manual agenda entry and `.ics` calendar import.
-- Controlled demo day.
-- Multi-journey travel confirmation and maximum-extra-travel preference.
-- Amazon Location Routes V2 for live car, pedestrian and transit candidates; deterministic Lambda bike heuristic.
-- Backend pollution/weather/UV inputs.
-- Deterministic modeled exposure scoring; Bedrock never produces numeric scores.
-- Whole-day combinatorial optimization with arrival and time-budget constraints.
-- Before/after metrics, exact changes, route comparison, explanation drawer, accepted plan and history.
-- API Gateway + Lambda + Express Step Functions + DynamoDB + Bedrock + Amplify deployment setup.
+- **Maps:** Amazon Location Maps V2, rendered with MapLibre, with live traffic, pan/zoom, automatic route fitting, route overlays, and a verified-geometry fallback.
+- **Routes:** Amazon Location Routes V2 for live car, pedestrian, and transit routing. The app does not fabricate bicycle routes when live Amazon routing cannot verify them.
+- **Geocoding:** Amazon Location Places.
+- **Weather + UV + air quality:** Tomorrow.io when a server-side key is supplied; Open-Meteo automatically remains a live fallback.
+- **Optimization:** AWS Lambda + Express Step Functions.
+- **Explanations:** Amazon Bedrock, grounded in deterministic optimizer results.
+- **Persistence:** DynamoDB.
+- **Frontend:** AWS Amplify compatible.
+
+## Live behavior
+
+The production map key is created by the SAM stack and is restricted to Amazon Location map rendering. The browser does **not** need a manually copied Amazon map key: it calls `/api/runtime-config`, whose Lambda is allowed only to describe that single public map key.
+
+Current environmental conditions refresh every five minutes. If the user has entered a real home location, Amazon Places geocodes it. Otherwise the browser may request location permission. The UI never substitutes hardcoded AQI/weather values for a failed live request.
+
+Tomorrow.io is optional. Without a Tomorrow.io key, the backend still returns live weather, UV, PM2.5, PM10, AQI, humidity, wind, and rain probability through the Open-Meteo fallback.
 
 ## Local development
 
 ```bash
-cd backend && npm install && cp .env.example .env && npm run dev
-cd frontend && npm install && cp .env.example .env && npm run dev
+cd backend
+npm install
+cp .env.example .env
+npm run dev
 ```
 
-Open `http://localhost:5173`. Demo mode keeps all optimization on the backend while controlling external data.
+In another terminal:
+
+```bash
+cd frontend
+npm install
+cp .env.example .env
+npm run dev
+```
+
+Open `http://localhost:5173`.
+
+For local interactive Amazon maps, `AMAZON_LOCATION_API_KEY` may be placed in `backend/.env`. Without it, local development uses the verified route-geometry fallback.
 
 ## AWS deployment
 
+Install the SAM TypeScript builder and deploy:
+
 ```bash
-sam build
+npm install --global esbuild@0.24.2
+sam validate
+sam build --parallel
 sam deploy --guided
 ```
 
-Deploy `frontend/` to Amplify and set `VITE_API_BASE_URL` to the SAM `ApiEndpoint` output. Optionally set `VITE_PRODUCT_NAME` and `BedrockModelId` later.
+Recommended SAM parameter values:
 
-The browser never runs the optimizer. In production, `/api/day/analyze` starts the Step Functions workflow; analysis does not silently fall back to client-side optimization.
+```text
+DemoMode=false
+AppTimezoneOffset=+05:30
+TomorrowIoApiKey=<optional server-side Tomorrow.io key>
+MapAllowedReferer=*
+```
 
-## Scientific language
+For a production domain, replace `MapAllowedReferer=*` with the Amplify/site referer pattern after the first deployment.
 
-Results use **modeled exposure**, **estimated exposure reduction**, **high-UV outdoor time**, and **lower-exposure route**. The product does not claim medical safety, disease avoidance, or exact inhaled dose.
+Deploy `frontend/` to Amplify and set:
+
+```text
+VITE_API_BASE_URL=<ApiEndpoint output from the SAM stack>
+```
+
+That is the only required frontend deployment variable. `VITE_AMAZON_LOCATION_API_KEY` is an optional local/debug override; production discovers the SAM-created key automatically.
 
 ## Validation
 
+The CI pipeline blocks merges unless all of these pass:
+
 ```bash
-cd backend && npm run typecheck && npm test
-cd ../frontend && npm run typecheck && npm run build
+cd backend
+npm install
+npm run typecheck
+npm test
+
+cd ../frontend
+npm install
+npm run test:ui
+npm run typecheck
+npm run build
+
+cd ..
+sam validate
+sam build --parallel
 ```
+
+The product uses **modeled exposure** and **estimated exposure reduction** language. It does not claim medical safety, disease avoidance, or exact inhaled dose.
