@@ -3,9 +3,10 @@ import { handler as prepare } from '../handlers/prepare';
 import { parseIcs } from '../core/ics';
 import { isValidTime, timeToMinutes } from '../core/time';
 import { optimizeCandidateSets } from '../core/optimizer';
+import { routesForTrip } from '../services/routes';
 import type { RouteCandidate, TripCandidateSet } from '../types';
 
-const env = { pm25: 90, pm10: 130, aqi: 120, temperature: 33, uvIndex: 7, rainProbability: 10, source: 'stress' };
+const env = { pm25: 90, pm10: 130, aqi: 120, temperature: 33, humidity: 45, windSpeed: 7, uvIndex: 7, rainProbability: 10, source: 'stress' };
 
 function candidate(trip: number, option: number): RouteCandidate {
   const original = option === 0;
@@ -25,6 +26,7 @@ function candidate(trip: number, option: number): RouteCandidate {
     heatRiskOutdoorMinutes: option % 2 ? 3 : 1,
     estimatedCo2eKg: original ? 1.2 : 0.5,
     environment: env,
+    environmentSamples: [{ position: { lat: 0, lon: 0 }, minutes: 20 + option, environment: env }],
     geometry: [],
     source: 'stress',
   };
@@ -104,7 +106,20 @@ async function main() {
     /does not match/,
   );
 
-  console.log('stress and validation tests passed');
+  await assert.rejects(
+    () => routesForTrip({
+      origin: { lat: 28.6, lon: 77.2 },
+      destination: { lat: 28.7, lon: 77.3 },
+      mode: 'bike',
+      date: '2026-10-07',
+      departureTime: '08:00',
+      demoMode: false,
+      tripOrdinal: 0,
+    }),
+    /Bike routing is unavailable/,
+  );
+
+  console.log('stress, validation and live-routing guard tests passed');
 }
 
 void main();
