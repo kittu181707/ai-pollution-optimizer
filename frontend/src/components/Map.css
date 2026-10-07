@@ -1,0 +1,132 @@
+.aws-map-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #eef2ef;
+}
+.aws-live-map {
+  position: absolute;
+  inset: 0;
+}
+.aws-live-map.hidden {
+  visibility: hidden;
+}
+.aws-map-shell .maplibregl-map,
+.aws-map-shell .maplibregl-canvas {
+  width: 100%;
+  height: 100%;
+}
+.aws-map-shell .maplibregl-ctrl-top-right {
+  top: 10px;
+  right: 10px;
+}
+.aws-map-shell .maplibregl-ctrl-group {
+  overflow: hidden;
+  border: 1px solid rgba(210,218,212,.92);
+  border-radius: 11px;
+  box-shadow: 0 5px 18px rgba(28,42,33,.12);
+}
+.map-live-badge {
+  position: absolute;
+  z-index: 5;
+  left: 14px;
+  top: 14px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid rgba(255,255,255,.78);
+  border-radius: 999px;
+  background: rgba(15,122,80,.92);
+  color: #fff;
+  box-shadow: 0 5px 16px rgba(15,55,37,.18);
+  backdrop-filter: blur(10px);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .075em;
+}
+.map-live-badge.fallback {
+  background: rgba(57,65,60,.88);
+}
+.map-route-legend {
+  position: absolute;
+  z-index: 5;
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 9px 11px;
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 11px;
+  background: rgba(255,255,255,.91);
+  color: #3e4942;
+  box-shadow: 0 5px 16px rgba(28,42,33,.12);
+  backdrop-filter: blur(10px);
+  font-size: 10px;
+  font-weight: 720;
+}
+.map-route-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.map-line {
+  width: 22px;
+  height: 4px;
+  border-radius: 99px;
+}
+.map-line.current { background: #7f8782; }
+.map-line.recommended { background: #0f8a57; }
+.map-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d6a620;
+}
+.map-loading {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #617069;
+  font-size: 12px;
+  font-weight: 750;
+  background: linear-gradient(135deg,#eef3ef,#f8faf8);
+}
+.map-fallback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: #718078;
+  background: linear-gradient(135deg,#eef3ef,#f8faf8);
+}
+.fallback-route {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.fallback-route.current {
+  stroke: #7f8782;
+  stroke-width: 5;
+  opacity: .66;
+}
+.fallback-route.recommended {
+  stroke: #0f8a57;
+  stroke-width: 7;
+}
+.fallback-sample {
+  fill: #d6a620;
+  stroke: white;
+  stroke-width: 2;
+}
+@media (max-width: 720px) {
+  .aws-map-shell { min-height: 400px; }
+  .map-route-legend { right: 14px; }
+}
