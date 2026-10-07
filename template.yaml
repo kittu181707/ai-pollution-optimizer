@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: AI Personal Pollution Optimizer whole-day environmental exposure optimizer
+Description: AI Personal Pollution Optimizer - AWS-native whole-day environmental exposure optimizer
 
 Parameters:
   DemoMode:
@@ -10,6 +10,14 @@ Parameters:
   BedrockModelId:
     Type: String
     Default: ''
+  TomorrowIoApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+  MapAllowedReferer:
+    Type: String
+    Default: '*'
+    Description: Browser referer allowed to use the public map-only Amazon Location API key. Use the Amplify domain in production.
   AppTimezoneOffset:
     Type: String
     Default: '+05:30'
@@ -34,6 +42,22 @@ Globals:
       AllowOrigin: "'*'"
 
 Resources:
+  LiveMapApiKey:
+    Type: AWS::Location::APIKey
+    Properties:
+      KeyName: !Sub '${AWS::StackName}-web-map'
+      Description: Public browser key restricted to Amazon Location Maps V2 rendering
+      NoExpiry: true
+      ForceDelete: true
+      ForceUpdate: true
+      Restrictions:
+        AllowActions:
+          - geo-maps:*
+        AllowResources:
+          - !Sub 'arn:${AWS::Partition}:geo-maps:${AWS::Region}::provider/default'
+        AllowReferers:
+          - !Ref MapAllowedReferer
+
   PlansTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -52,19 +76,41 @@ Resources:
         AttributeName: expiresAt
         Enabled: true
 
+  WorkflowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
+
   PrepareFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/prepare.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/prepare.handler
 
   OptimizeFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/optimize.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/optimize.handler
-      Timeout: 60
+      Timeout: 90
       MemorySize: 768
+      Environment:
+        Variables:
+          TOMORROW_IO_API_KEY: !Ref TomorrowIoApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -75,6 +121,13 @@ Resources:
 
   PersistFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/persist.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/persist.handler
@@ -86,6 +139,12 @@ Resources:
     Type: AWS::Serverless::StateMachine
     Properties:
       Type: EXPRESS
+      Logging:
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt WorkflowLogGroup.Arn
+        IncludeExecutionData: true
+        Level: ALL
       Definition:
         StartAt: Prepare
         States:
@@ -108,9 +167,28 @@ Resources:
             FunctionName: !Ref OptimizeFunction
         - LambdaInvokePolicy:
             FunctionName: !Ref PersistFunction
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogDelivery
+                - logs:GetLogDelivery
+                - logs:UpdateLogDelivery
+                - logs:DeleteLogDelivery
+                - logs:ListLogDeliveries
+                - logs:PutResourcePolicy
+                - logs:DescribeResourcePolicies
+                - logs:DescribeLogGroups
+              Resource: '*'
 
   AnalyzeApiFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/analyze-api.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/analyze-api.handler
@@ -132,6 +210,13 @@ Resources:
 
   IcsFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/ics.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/ics.handler
@@ -144,6 +229,13 @@ Resources:
 
   DemoFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/demo.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/demo.handler
@@ -156,6 +248,13 @@ Resources:
 
   AcceptFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/accept.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/accept.handler
@@ -171,6 +270,13 @@ Resources:
 
   HistoryFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/history.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/history.handler
@@ -184,8 +290,118 @@ Resources:
             Path: /api/history
             Method: get
 
+  ImpactFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/impact.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/impact.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PlansTable
+      Events:
+        CommunityImpact:
+          Type: Api
+          Properties:
+            Path: /api/impact/community
+            Method: get
+
+  IndiaFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/india.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/india.handler
+      Timeout: 30
+      Environment:
+        Variables:
+          TOMORROW_IO_API_KEY: !Ref TomorrowIoApiKey
+      Events:
+        India:
+          Type: Api
+          Properties:
+            Path: /api/india
+            Method: get
+
+  EnvironmentCurrentFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/environment-current.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/environment-current.handler
+      Timeout: 15
+      Environment:
+        Variables:
+          TOMORROW_IO_API_KEY: !Ref TomorrowIoApiKey
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - geo-places:Geocode
+              Resource: '*'
+      Events:
+        CurrentEnvironment:
+          Type: Api
+          Properties:
+            Path: /api/environment/current
+            Method: post
+
+  RuntimeConfigFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/runtime-config.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
+    Properties:
+      CodeUri: backend/
+      Handler: src/handlers/runtime-config.handler
+      Timeout: 10
+      Environment:
+        Variables:
+          MAP_API_KEY_NAME: !Ref LiveMapApiKey
+          AMAZON_LOCATION_MAP_STYLE: Standard
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: geo:DescribeKey
+              Resource: !GetAtt LiveMapApiKey.Arn
+      Events:
+        RuntimeConfig:
+          Type: Api
+          Properties:
+            Path: /api/runtime-config
+            Method: get
+
   ExplainFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handlers/explain.ts]
+        Minify: true
+        Target: es2022
+        Sourcemap: false
     Properties:
       CodeUri: backend/
       Handler: src/handlers/explain.handler
@@ -207,6 +423,9 @@ Outputs:
   ApiEndpoint:
     Description: API Gateway base URL
     Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
+  LiveMapApiKeyName:
+    Description: Amazon Location browser map key name. The frontend discovers its public value automatically through /api/runtime-config.
+    Value: !Ref LiveMapApiKey
   StateMachineArn:
     Description: Optimization workflow ARN
     Value: !Ref OptimizationStateMachine
