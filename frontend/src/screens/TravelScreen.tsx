@@ -2,8 +2,8 @@ import { ArrowLeft, ArrowRight } from 'lucide-react';
 import type { JourneyInput, TransportMode } from '../types';
 import { modes, shortTime } from '../utils';
 
-export function TravelScreen({ journeys, setJourneys, maxExtra, setMaxExtra, onBack, onAnalyze }: {
-  journeys: JourneyInput[]; setJourneys: (value: JourneyInput[]) => void; maxExtra: number; setMaxExtra: (value: number) => void; onBack: () => void; onAnalyze: () => void;
+export function TravelScreen({ journeys, setJourneys, maxExtra, setMaxExtra, onBack, onAnalyze, isDemo }: {
+  journeys: JourneyInput[]; setJourneys: (value: JourneyInput[]) => void; maxExtra: number; setMaxExtra: (value: number) => void; onBack: () => void; onAnalyze: () => void; isDemo: boolean;
 }) {
   const update = (id: string, patch: Partial<JourneyInput>) => setJourneys(journeys.map((j) => j.tripId === id ? { ...j, ...patch } : j));
   return <div className="screen wide">
@@ -13,7 +13,7 @@ export function TravelScreen({ journeys, setJourneys, maxExtra, setMaxExtra, onB
       <div className="journey-head"><span>Journey {index + 1}</span><strong>{shortTime(journey.departureTime)}{journey.arriveBy ? ` → by ${shortTime(journey.arriveBy)}` : ''}</strong></div>
       <div className="route-pair"><strong>{journey.origin}</strong><ArrowRight/><strong>{journey.destination}</strong></div>
       <label>Planned departure<input type="time" value={journey.departureTime} onChange={(e) => update(journey.tripId, { departureTime: e.target.value })}/></label>
-      <div><span className="field-label">Usual mode</span><div className="mode-grid">{modes.map((mode) => <button className={journey.mode === mode.value ? 'selected' : ''} key={mode.value} onClick={() => update(journey.tripId, { mode: mode.value as TransportMode })}>{mode.label}</button>)}</div></div>
+      <div><span className="field-label">Usual mode</span><div className="mode-grid">{modes.map((mode) => { const disabled = mode.value === 'bike' && !isDemo; return <button className={journey.mode === mode.value ? 'selected' : ''} key={mode.value} disabled={disabled} title={disabled ? 'Live bicycle routing is not verified by the configured Amazon Location provider' : undefined} onClick={() => update(journey.tripId, { mode: mode.value as TransportMode })}>{mode.label}</button>; })}</div></div>
     </article>)}</div>
     <article className="preference-card"><div><p className="eyebrow">ONE PREFERENCE</p><h2>Maximum extra travel today</h2></div><div className="segmented">{[0,5,10,15].map((v) => <button key={v} className={maxExtra === v ? 'selected' : ''} onClick={() => setMaxExtra(v)}>{v ? `+${v}` : '0'} min</button>)}</div></article>
     <div className="sticky-actions"><button className="primary" onClick={onAnalyze}>Analyze my day</button></div>

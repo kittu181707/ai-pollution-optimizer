@@ -1,10 +1,12 @@
-import { Cloud, MapPin, Search, Wind, Sun, ArrowRight, Calendar, AlertTriangle } from 'lucide-react';
+import { Search, ArrowRight, Calendar, AlertTriangle } from 'lucide-react';
+import { LiveEnvironmentSnapshot } from '../components/LiveEnvironmentSnapshot';
 import type { AgendaPayload, JourneyInput } from '../types';
 
 export function TodayScreen({
   agenda,
   journeys,
   busy,
+  isDemo,
   onImport,
   onManual,
   onDemo,
@@ -14,6 +16,7 @@ export function TodayScreen({
   agenda: AgendaPayload;
   journeys: JourneyInput[];
   busy: boolean;
+  isDemo: boolean;
   onImport: () => void;
   onManual: () => void;
   onDemo: () => void;
@@ -28,42 +31,7 @@ export function TodayScreen({
         <h1>Good morning.<br/>Here's your environmental plan for today.</h1>
       </div>
 
-      <div className="snapshot-card">
-        <div className="snapshot-header">
-          <h3>Environmental Snapshot</h3>
-          <span className="location-badge"><MapPin size={14}/> {agenda.homeLocation || 'Delhi (Default)'}</span>
-        </div>
-        <div className="snapshot-grid">
-          <div className="snapshot-metric">
-            <span className="label">AQI</span>
-            <strong>86</strong>
-            <span className="status moderate">Moderate</span>
-          </div>
-          <div className="snapshot-metric">
-            <span className="label">PM2.5</span>
-            <strong>32 µg/m³</strong>
-          </div>
-          <div className="snapshot-metric">
-            <span className="label">PM10</span>
-            <strong>85 µg/m³</strong>
-          </div>
-          <div className="snapshot-metric">
-            <span className="label"><Sun size={14}/> UV</span>
-            <strong>High</strong>
-          </div>
-          <div className="snapshot-metric">
-            <span className="label"><Wind size={14}/> Wind</span>
-            <strong>12 km/h</strong>
-          </div>
-          <div className="snapshot-metric">
-            <span className="label"><Cloud size={14}/> Rain</span>
-            <strong>0%</strong>
-          </div>
-        </div>
-        <div className="snapshot-footer">
-          Source: CPCB • Updated 4 min ago
-        </div>
-      </div>
+      <LiveEnvironmentSnapshot homeLocation={agenda.homeLocation} isDemo={isDemo}/>
 
       {error && <div className="error-banner"><AlertTriangle size={16}/> {error}</div>}
 
@@ -78,23 +46,17 @@ export function TodayScreen({
         </div>
       ) : (
         <div className="today-journeys">
-          <h3>Today's Journeys</h3>
+          <h3>Today's journeys</h3>
           <div className="timeline">
-            {journeys.map((j, i) => (
-              <div key={i} className="timeline-row">
-                <div className="time">{j.departureTime}</div>
+            {journeys.map((journey) => (
+              <div key={journey.tripId} className="timeline-row">
+                <div className="time">{journey.departureTime}</div>
                 <div className="timeline-dot"></div>
                 <div className="journey-summary">
                   <div className="journey-route">
-                    <strong>{j.origin}</strong> <ArrowRight size={14}/> <strong>{j.destination}</strong>
+                    <strong>{journey.origin}</strong> <ArrowRight size={14}/> <strong>{journey.destination}</strong>
                   </div>
-                  <div className="journey-meta">
-                    <span>{j.mode}</span>
-                  </div>
-                  <div className="journey-env">
-                    <span className="env-badge aqi-high">AQI High</span>
-                    <span className="env-badge heat-mod">Heat Moderate</span>
-                  </div>
+                  <div className="journey-meta"><span>{journey.mode}</span></div>
                 </div>
               </div>
             ))}
@@ -102,7 +64,7 @@ export function TodayScreen({
           <div className="sticky-actions">
             <button className="primary large full" onClick={onAnalyze} disabled={busy}>
               {busy ? <Search className="spin" size={20}/> : <Search size={20}/>}
-              <span>Optimize My Day</span>
+              <span>Optimize my day</span>
             </button>
           </div>
         </div>

@@ -8,6 +8,7 @@ export interface OptimizeSetsInput {
   maxExtraMinutes: number;
   environmentSource: string;
   routeSource: string;
+  dataMode?: 'demo' | 'live';
 }
 
 type State = {
@@ -116,6 +117,12 @@ export function optimizeCandidateSets(input: OptimizeSetsInput): DayAnalysis {
       feasiblePlans: safeBigInt(feasibleCombinations),
       environmentSource: input.environmentSource,
       routeSource: input.routeSource,
+      environmentalSamples: input.sets.reduce(
+        (total, set) => total + set.candidates.reduce((sum, candidate) => sum + candidate.environmentSamples.length, 0),
+        0,
+      ),
+      dataMode: input.dataMode || 'live',
+      analysisDurationMs: 0,
     },
   };
 }

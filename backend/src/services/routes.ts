@@ -20,7 +20,7 @@ export async function routesForTrip(input: {
   tripOrdinal: number;
 }): Promise<BaseRoute[]> {
   if (input.demoMode) return demoRoutes(input);
-  if (input.mode === 'bike') return [bikeHeuristic(input.origin, input.destination)];
+  if (input.mode === 'bike') throw new Error('Bike routing is unavailable from the configured live Amazon Location provider');
 
   const { CalculateRoutesCommand } = await import('@aws-sdk/client-geo-routes');
   const travelMode = input.mode === 'walk' ? 'Pedestrian' : (input.mode === 'bus' || input.mode === 'metro') ? 'Transit' : 'Car';
@@ -114,19 +114,6 @@ function demoRoutes(input: {
       geometry: bend(input.origin, input.destination, -0.02),
     }]
     : [base];
-}
-
-function bikeHeuristic(origin: Coordinates, destination: Coordinates): BaseRoute {
-  const distance = haversine(origin, destination) * 1.12;
-  return {
-    routeId: 'bike-heuristic',
-    mode: 'bike',
-    label: 'Bike',
-    travelMinutes: Math.max(4, Math.round(distance / 15 * 60)),
-    distanceKm: round(distance),
-    geometry: [origin, destination],
-    source: 'AWS Lambda bike heuristic',
-  };
 }
 
 function label(mode: TransportMode) {

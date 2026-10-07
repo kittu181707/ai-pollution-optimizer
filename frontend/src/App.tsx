@@ -157,16 +157,17 @@ export default function App() {
   if (tab === 'india') return <div className="app-container"><Sidebar active={tab} onChange={onNav}/><main className="main-content"><IndiaScreen /></main></div>;
 
   let content;
-  if (step === 'landing' || step === 'travel') {
-    content = <TodayScreen agenda={agenda} journeys={journeys} busy={busy} onImport={() => startAgenda('import')} onManual={() => startAgenda('manual')} onDemo={loadDemo} onAnalyze={runAnalysis} error={error}/>;
+  if (step === 'landing') {
+    content = <TodayScreen agenda={agenda} journeys={journeys} busy={busy} isDemo={isDemo} onImport={() => startAgenda('import')} onManual={() => startAgenda('manual')} onDemo={loadDemo} onAnalyze={runAnalysis} error={error}/>;
   }
   else if (step === 'import' || step === 'manual') content = <ImportScreen agenda={agenda} setAgenda={setAgenda} mode={step} onBack={() => setStep('landing')} onContinue={continueToTravel} onIcs={importIcs} busy={busy} error={error}/>;
+  else if (step === 'travel') content = <TravelScreen journeys={journeys} setJourneys={setJourneys} maxExtra={maxExtra} setMaxExtra={setMaxExtra} onBack={() => setStep(agendaMode)} onAnalyze={runAnalysis} isDemo={isDemo}/>;
   else if (step === 'analysis') content = <AnalysisScreen error={error} onBack={() => setStep('travel')}/>;
   else if (step === 'overview' && analysis) content = <OverviewScreen analysis={analysis} onChanges={() => setStep('changes')} onKeep={() => { setAnalysis(null); setStep('landing'); }}/>;
   else if (step === 'changes' && analysis) content = <ChangesScreen analysis={analysis} onBack={() => setStep('overview')} onWhy={openWhy} onFinal={() => setStep('final')}/>;
   else if (step === 'final' && analysis) content = <FinalPlanScreen analysis={analysis} onBack={() => setStep('changes')} onAccept={acceptPlan} busy={busy}/>;
   else if (step === 'accepted' && accepted) content = <AcceptedScreen plan={accepted} onDone={() => { setTab('today'); setStep('overview'); }}/>;
-  else content = <TodayScreen agenda={agenda} journeys={journeys} busy={busy} onImport={() => startAgenda('import')} onManual={() => startAgenda('manual')} onDemo={loadDemo} onAnalyze={runAnalysis} error={error}/>;
+  else content = <TodayScreen agenda={agenda} journeys={journeys} busy={busy} isDemo={isDemo} onImport={() => startAgenda('import')} onManual={() => startAgenda('manual')} onDemo={loadDemo} onAnalyze={runAnalysis} error={error}/>;
 
   const showMap = analysis && ['overview', 'changes', 'final', 'accepted'].includes(step);
 
@@ -179,7 +180,7 @@ export default function App() {
           <div className="split-layout">
             <div className="split-left">{content}</div>
             <div className="split-right">
-              <Map trips={analysis!.trips} />
+              <Map trips={analysis!.trips} isDemo={isDemo} />
             </div>
           </div>
         ) : (

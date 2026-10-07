@@ -1,0 +1,166 @@
+import { CloudRain, Gauge, LocateFixed, RefreshCw, Sun, ThermometerSun, Wind } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '../api';
+import type { Coordinates, EnvironmentSnapshot } from '../types';
+
+type Query = { position?: Coordinates; location?: string; label: string };
+
+const DEMO: EnvironmentSnapshot = {
+  pm25: 148,
+  pm10: 192,
+  aqi: 186,
+  temperature: 25,
+  humidity: 58,
+  windSpeed: 7,
+  uvIndex: 2,
+  rainProbability: 5,
+  source: 'Controlled demo environmental data',
+};
+
+function aqiLabel(value: number) {
+  if (value <= 50) return 'Good';
+  if (value <= 100) return 'Moderate';
+  if (value <= 150) return 'Sensitive';
+  if (value <= 200) return 'High';
+  return 'Very high';
+}
+
+function meaningfulLocation(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return Boolean(normalized && normalized !== 'home' && normalized !== 'current location');
+}
+
+function browserPosition(): Promise<Coordinates> {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Browser location unavailable'));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({ lat: position.coords.latitude, lon: position.coords.longitude }),
+      () => reject(new Error('Location permission unavailable')),
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 10 * 60_000 },
+    );
+  });
+}
+
+function ageLabel(updatedAt?: string) {
+  if (!updatedAt) return 'fresh feed';
+  const age = Date.now() - Date.parse(updatedAt);
+  if (!Number.isFinite(age) || age < 60_000) return 'updated now';
+  return `updated ${Math.max(1, Math.round(age / 60_000))} min ago`;
+}
+
+export function LiveEnvironmentSnapshot({ homeLocation, isDemo }: { homeLocation: string; isDemo: boolean }) {
+  const [environment, setEnvironment] = useState<EnvironmentSnapshot | null>(isDemo ? DEMO : null);
+  const [query, setQuery] = useState<Query | null>(null);
+  const [busy, setBusy] = useState(!isDemo);
+  const [error, setError] = useState<string>();
+  const [, setClock] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+
+    if (isDemo) {
+      setEnvironment(DEMO);
+      setQuery({ label: 'Controlled demo' });
+      setBusy(false);
+      setError(undefined);
+      return () => { active = false; };
+    }
+
+    const resolveQuery = async () => {
+      if (meaningfulLocation(homeLocation)) {
+        return { location: homeLocation.trim(), label: homeLocation.trim() } satisfies Query;
+      }
+
+      const position = await browserPosition();
+      return { position, label: 'Current location' } satisfies Query;
+    };
+
+    setBusy(true);
+    setError(undefined);
+    void resolveQuery().then((next) => {
+      if (active) setQuery(next);
+    }).catch(() => {
+      if (!active) return;
+      setBusy(false);
+      setError('Set your home location or allow location access for live conditions.');
+    });
+
+    return () => { active = false; };
+  }, [homeLocation, isDemo]);
+
+  useEffect(() => {
+    if (isDemo || !query) return;
+    let active = true;
+
+    const refresh = async () => {
+      setBusy(true);
+      try {
+        const next = await api.currentEnvironment({ position: query.position, location: query.location });
+        if (active) {
+          setEnvironment(next);
+          setError(undefined);
+        }
+      } catch (cause) {
+        if (active && !environment) {
+          setError(cause instanceof Error ? cause.message : 'Live conditions unavailable');
+        }
+      } finally {
+        if (active) setBusy(false);
+      }
+    };
+
+    void refresh();
+    const dataTimer = window.setInterval(() => void refresh(), 5 * 60_000);
+    const clockTimer = window.setInterval(() => setClock((value) => value + 1), 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(dataTimer);
+      window.clearInterval(clockTimer);
+    };
+  }, [query?.label, query?.location, query?.position?.lat, query?.position?.lon, isDemo]);
+
+  const sourceLabel = useMemo(() => {
+    if (isDemo) return 'DEMO DATA';
+    if (!environment) return 'LIVE FEED';
+    return environment.source.includes('Tomorrow.io') ? 'LIVE · TOMORROW.IO' : 'LIVE · FALLBACK';
+  }, [environment, isDemo]);
+
+  if (!environment) {
+    return <section className="snapshot-card live-snapshot">
+      <div className="snapshot-header">
+        <div><span className="snapshot-kicker">Environmental snapshot</span><h3>Live conditions</h3></div>
+        <span className="live-source-badge">{busy ? 'CONNECTING' : 'LIVE'}</span>
+      </div>
+      <div className="snapshot-empty">
+        <LocateFixed size={21}/>
+        <span>{error || 'Finding current environmental conditions…'}</span>
+      </div>
+    </section>;
+  }
+
+  return <section className="snapshot-card live-snapshot" aria-label="Live environmental conditions">
+    <div className="snapshot-header">
+      <div>
+        <span className="snapshot-kicker">Environmental snapshot</span>
+        <h3>{query?.label || 'Along your day'}</h3>
+      </div>
+      <span className={`live-source-badge ${isDemo ? 'demo' : ''}`}>{sourceLabel}</span>
+    </div>
+    <div className="snapshot-grid">
+      <div className="snapshot-metric"><Gauge size={15}/><span className="label">AQI</span><strong>{Math.round(environment.aqi)}</strong><span className="status moderate">{aqiLabel(environment.aqi)}</span></div>
+      <div className="snapshot-metric"><Wind size={15}/><span className="label">PM2.5</span><strong>{environment.pm25.toFixed(0)}</strong><small>µg/m³</small></div>
+      <div className="snapshot-metric"><Wind size={15}/><span className="label">PM10</span><strong>{environment.pm10.toFixed(0)}</strong><small>µg/m³</small></div>
+      <div className="snapshot-metric"><ThermometerSun size={15}/><span className="label">Temperature</span><strong>{environment.temperature.toFixed(0)}°C</strong><small>{environment.humidity.toFixed(0)}% humidity</small></div>
+      <div className="snapshot-metric"><Sun size={15}/><span className="label">UV</span><strong>{environment.uvIndex.toFixed(1)}</strong><small>index</small></div>
+      <div className="snapshot-metric"><CloudRain size={15}/><span className="label">Rain</span><strong>{environment.rainProbability.toFixed(0)}%</strong><small>{environment.windSpeed.toFixed(0)} km/h wind</small></div>
+    </div>
+    <div className="snapshot-footer">
+      <span>{environment.source}</span>
+      <span>{busy ? <><RefreshCw className="spin" size={12}/> refreshing</> : ageLabel(environment.updatedAt)}</span>
+    </div>
+  </section>;
+}
