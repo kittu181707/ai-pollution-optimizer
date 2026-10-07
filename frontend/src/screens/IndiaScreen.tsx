@@ -73,7 +73,7 @@ export function IndiaScreen() {
 
   useEffect(() => {
     let active = true;
-    if (!containerRef.current || !maplibregl.supported()) {
+    if (!containerRef.current) {
       setStatus('fallback');
       return;
     }
@@ -89,7 +89,7 @@ export function IndiaScreen() {
         style: styleUrl(config),
         center: [78.9629, 20.5937],
         zoom: 4.2,
-        attributionControl: true,
+        attributionControl: { compact: true },
         validateStyle: false,
         cooperativeGestures: false,
         pitchWithRotate: false,
