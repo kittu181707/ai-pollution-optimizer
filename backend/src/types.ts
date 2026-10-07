@@ -35,9 +35,19 @@ export interface EnvironmentSnapshot {
   pm10: number;
   aqi: number;
   temperature: number;
+  humidity: number;
+  windSpeed: number;
   uvIndex: number;
   rainProbability: number;
   source: string;
+  updatedAt?: string;
+  validAt?: string;
+}
+
+export interface RouteEnvironmentSample {
+  position: Coordinates;
+  minutes: number;
+  environment: EnvironmentSnapshot;
 }
 
 export interface BaseRoute {
@@ -61,6 +71,7 @@ export interface RouteCandidate extends BaseRoute {
   heatRiskOutdoorMinutes: number;
   estimatedCo2eKg: number;
   environment: EnvironmentSnapshot;
+  environmentSamples: RouteEnvironmentSample[];
 }
 
 export interface TripCandidateSet {
@@ -110,6 +121,9 @@ export interface DayAnalysis {
     feasiblePlans: number;
     environmentSource: string;
     routeSource: string;
+    environmentalSamples: number;
+    dataMode: 'demo' | 'live';
+    analysisDurationMs: number;
   };
 }
 
