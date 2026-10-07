@@ -3,14 +3,22 @@ on:
   push:
     branches: [master, main]
   pull_request:
+
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ap-south-1
+      AWS_DEFAULT_REGION: ap-south-1
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - uses: aws-actions/setup-sam@v2
+
       - name: Backend
         run: |
           cd backend
@@ -18,10 +26,52 @@ jobs:
           npm audit --audit-level=high
           npm run typecheck
           npm test
+
+      - name: Local API smoke
+        run: |
+          cd backend
+          npm run dev > /tmp/pollution-optimizer-backend.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          node --input-type=module <<'NODE'
+          const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          let demo;
+          for (let attempt = 0; attempt < 30; attempt += 1) {
+            try {
+              const response = await fetch('http://127.0.0.1:3001/api/demo/day');
+              if (response.ok) { demo = await response.json(); break; }
+            } catch {}
+            await sleep(250);
+          }
+          if (!demo) throw new Error('local backend did not start');
+
+          const runtime = await fetch('http://127.0.0.1:3001/api/runtime-config');
+          if (!runtime.ok) throw new Error('runtime config endpoint failed');
+          const runtimeJson = await runtime.json();
+          if (!runtimeJson.region || runtimeJson.mapApiKey !== null) throw new Error('local runtime config contract changed');
+
+          const invalidEnvironment = await fetch('http://127.0.0.1:3001/api/environment/current', {
+            method:'POST',
+            headers:{'content-type':'application/json'},
+            body:JSON.stringify({position:{lat:120,lon:77}})
+          });
+          if (invalidEnvironment.status !== 400) throw new Error('invalid environment coordinates were not rejected');
+
+          console.log('local API demo + runtime-config + live-environment guard smoke passed');
+          NODE
+
+      - name: AWS SAM deployability
+        run: |
+          npm install --global esbuild@0.24.2
+          sam validate
+          sam build --parallel
+          test -n "$(find .aws-sam/build -type f -name '*.js' -print -quit)"
+
       - name: Frontend
         run: |
           cd frontend
           npm install
           npm audit --audit-level=high
+          npm run test:ui
           npm run typecheck
           npm run build
