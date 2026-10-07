@@ -77,6 +77,25 @@ for _ in {1..90}; do
   STATUS="$(aws amplify get-job     --app-id "$APP_ID"     --branch-name "$AMPLIFY_BRANCH"     --job-id "$JOB_ID"     --region "$AWS_REGION"     --query 'job.summary.status'     --output text)"
   case "$STATUS" in
     SUCCEED)
+      echo "==> Verifying deployed live services"
+      API_ROOT="${API_ENDPOINT%/}"
+      curl --fail --silent --show-error "$SITE_URL" >/dev/null
+
+      RUNTIME_JSON="$(curl --fail --silent --show-error "$API_ROOT/api/runtime-config")"
+      LIVE_JSON="$(curl --fail --silent --show-error         -H 'content-type: application/json'         -d '{"position":{"lat":28.6139,"lon":77.2090}}'         "$API_ROOT/api/environment/current")"
+
+      RUNTIME_JSON="$RUNTIME_JSON" LIVE_JSON="$LIVE_JSON" node --input-type=module <<'NODE'
+      const runtime = JSON.parse(process.env.RUNTIME_JSON || '{}');
+      const live = JSON.parse(process.env.LIVE_JSON || '{}');
+      if (!runtime.mapApiKey || !runtime.region) throw new Error('deployed Amazon Location runtime configuration is incomplete');
+      for (const key of ['aqi','pm25','pm10','temperature','uvIndex','rainProbability']) {
+        if (!Number.isFinite(Number(live[key]))) throw new Error('deployed live environment is missing ' + key);
+      }
+      if (!String(live.source || '').includes('realtime')) throw new Error('deployed environment endpoint is not returning a realtime source');
+      if (String(live.source || '').includes('Controlled demo')) throw new Error('production environment endpoint returned demo data');
+      console.log('live Amazon map configuration and environmental feed verified');
+NODE
+
       echo "Deployment ready: $SITE_URL"
       echo "API endpoint: $API_ENDPOINT"
       exit 0
