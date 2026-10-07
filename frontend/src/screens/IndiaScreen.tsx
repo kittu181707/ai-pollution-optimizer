@@ -49,6 +49,7 @@ export function IndiaScreen() {
   const [stations, setStations] = useState<Station[]>([]);
   const [status, setStatus] = useState<'loading'|'live'|'fallback'>('loading');
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -91,6 +92,7 @@ export function IndiaScreen() {
         cooperativeGestures: false,
         pitchWithRotate: false,
       });
+      mapRef.current = map;
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
       let loaded = false;
@@ -136,22 +138,22 @@ export function IndiaScreen() {
         if (!loaded && active) setStatus('fallback');
       });
 
-      const refresh = window.setInterval(() => {
-        const source = map.getSource('india-stations') as maplibregl.GeoJSONSource | undefined;
-        source?.setData(stationCollection(stations) as any);
-      }, 5_000);
-
-      return () => window.clearInterval(refresh);
     }).catch(() => {
       if (active) setStatus('fallback');
     });
 
-    return () => { active = false; };
+    return () => {
+      active = false;
+      mapRef.current?.remove();
+      mapRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
-    const map = (containerRef.current as any)?._maplibre;
-    void map;
+    const map = mapRef.current;
+    if (!map || !map.loaded()) return;
+    const source = map.getSource('india-stations') as maplibregl.GeoJSONSource | undefined;
+    source?.setData(stationCollection(stations) as any);
   }, [stations]);
 
   return (
