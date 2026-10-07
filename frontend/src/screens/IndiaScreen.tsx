@@ -47,6 +47,8 @@ async function mapConfig(): Promise<RuntimeConfig> {
 
 export function IndiaScreen() {
   const [stations, setStations] = useState<Station[]>([]);
+  const stationsRef = useRef<Station[]>([]);
+  stationsRef.current = stations;
   const [status, setStatus] = useState<'loading'|'live'|'fallback'>('loading');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -101,7 +103,7 @@ export function IndiaScreen() {
         loaded = true;
         map.addSource('india-stations', {
           type: 'geojson',
-          data: stationCollection(stations) as any,
+          data: stationCollection(stationsRef.current) as any,
         });
         map.addLayer({
           id: 'india-stations-circles',
