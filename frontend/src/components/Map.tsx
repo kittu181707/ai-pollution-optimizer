@@ -178,7 +178,7 @@ export function Map({ trips, isDemo = false }: { trips: TripAnalysis[]; isDemo?:
   useEffect(() => {
     let active = true;
 
-    if (!containerRef.current || !maplibregl.supported()) {
+    if (!containerRef.current) {
       setStatus('fallback');
       return;
     }
@@ -195,7 +195,7 @@ export function Map({ trips, isDemo = false }: { trips: TripAnalysis[]; isDemo?:
         style: styleUrl(config),
         center: first ? [first.lon, first.lat] : [77.209, 28.6139],
         zoom: first ? 11 : 5,
-        attributionControl: true,
+        attributionControl: { compact: true },
         validateStyle: false,
         cooperativeGestures: false,
         pitchWithRotate: false,
