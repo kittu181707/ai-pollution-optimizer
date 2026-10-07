@@ -45,7 +45,15 @@ For local interactive Amazon maps, `AMAZON_LOCATION_API_KEY` may be placed in `b
 
 ## AWS deployment
 
-Install the SAM TypeScript builder and deploy:
+For a full AWS deployment from an authenticated AWS CLI session, the repository now includes a one-command deployer. It deploys the SAM backend, reads the API endpoint, builds the frontend against it, creates/reuses an Amplify Hosting app, uploads the production build, tightens the Amazon Location map-key referer to the resulting Amplify domain, then verifies the live map configuration and realtime environmental endpoint.
+
+```bash
+bash scripts/deploy-aws.sh
+```
+
+Optional environment overrides include `AWS_REGION`, `STACK_NAME`, `AMPLIFY_APP_NAME`, `AMPLIFY_BRANCH`, `TOMORROW_IO_API_KEY`, and `BEDROCK_MODEL_ID`. Tomorrow.io is not required because Open-Meteo remains the live fallback.
+
+For manual deployment, install the SAM TypeScript builder and deploy:
 
 ```bash
 npm install --global esbuild@0.24.2
