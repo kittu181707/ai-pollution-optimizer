@@ -1,8 +1,9 @@
 import { strict as assert } from 'node:assert';
 import { optimizeCandidateSets } from '../core/optimizer';
+import { snapshotFromTomorrowValues } from '../services/environment';
 import type { RouteCandidate, TripCandidateSet } from '../types';
 
-const env = { pm25: 100, pm10: 150, aqi: 160, temperature: 30, uvIndex: 3, rainProbability: 0, source: 'test' };
+const env = { pm25: 100, pm10: 150, aqi: 160, temperature: 30, humidity: 50, windSpeed: 8, uvIndex: 3, rainProbability: 0, source: 'test' };
 
 function c(id: string, tripId: string, minutes: number, exposure: number, shift = 0): RouteCandidate {
   return {
@@ -21,6 +22,7 @@ function c(id: string, tripId: string, minutes: number, exposure: number, shift 
     heatRiskOutdoorMinutes: 0,
     estimatedCo2eKg: 1,
     environment: env,
+    environmentSamples: [{ position: { lat: 0, lon: 0 }, minutes, environment: env }],
     geometry: [],
     source: 'test',
   };
@@ -76,4 +78,23 @@ const stable = optimizeCandidateSets({
 });
 assert.equal(stable.changes.length, 0);
 
-console.log('core optimizer tests passed');
+const tomorrow = snapshotFromTomorrowValues({
+  particulateMatter25: 44,
+  particulateMatter10: 71,
+  epaIndex: 92,
+  temperature: 29.5,
+  humidity: 61,
+  windSpeed: 8.4,
+  uvIndex: 5.1,
+  precipitationProbability: 35,
+}, '2026-10-07T08:00:00Z', true);
+assert.equal(tomorrow.pm25, 44);
+assert.equal(tomorrow.pm10, 71);
+assert.equal(tomorrow.aqi, 92);
+assert.equal(tomorrow.temperature, 29.5);
+assert.equal(tomorrow.humidity, 61);
+assert.equal(tomorrow.windSpeed, 8.4);
+assert.equal(tomorrow.rainProbability, 35);
+assert(tomorrow.source.includes('Tomorrow.io realtime'));
+
+console.log('core optimizer and environmental mapping tests passed');
