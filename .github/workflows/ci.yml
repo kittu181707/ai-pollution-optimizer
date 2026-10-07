@@ -19,6 +19,9 @@ jobs:
 
       - uses: aws-actions/setup-sam@v2
 
+      - name: Deployment script syntax
+        run: bash -n scripts/deploy-aws.sh
+
       - name: Backend
         run: |
           cd backend
