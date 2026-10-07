@@ -1,5 +1,5 @@
 import { API_BASE_URL } from './config';
-import type { AcceptedPlan, AgendaPayload, AnalyzeDayRequest, DayAnalysis, TripAnalysis } from './types';
+import type { AcceptedPlan, AgendaPayload, AnalyzeDayRequest, Coordinates, DayAnalysis, EnvironmentSnapshot, RuntimeConfig, TripAnalysis } from './types';
 
 async function request<T>(path: string, init?: RequestInit, timeoutMs = 15_000): Promise<T> {
   const controller = new AbortController();
@@ -28,6 +28,8 @@ export const api = {
   acceptPlan: (userId: string, planId: string) => request<AcceptedPlan>('/api/plan/accept', { method: 'POST', body: JSON.stringify({ userId, planId }) }),
   history: (userId: string) => request<{ plans: AcceptedPlan[] }>(`/api/history?userId=${encodeURIComponent(userId)}`),
   communityImpact: () => request<{ totalPlans: number; totalCo2eSaved: number }>('/api/impact/community'),
+  currentEnvironment: (input: { position?: Coordinates; location?: string }) => request<EnvironmentSnapshot & { position?: Coordinates }>('/api/environment/current', { method: 'POST', body: JSON.stringify(input) }, 12_000),
+  runtimeConfig: () => request<RuntimeConfig>('/api/runtime-config', undefined, 8_000),
   explain: (planId: string, trip: TripAnalysis) => request<{ explanation: string; source: string }>('/api/explain', {
     method: 'POST',
     body: JSON.stringify({ planId, tripId: trip.tripId, change: trip }),
