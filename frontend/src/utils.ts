@@ -12,22 +12,34 @@ export function uid(prefix = 'id') {
   return `${prefix}-${crypto.randomUUID?.() || Math.random().toString(36).slice(2)}`;
 }
 
-export function getUserId() {
+const SESSION_KEY = 'pollution_private_session_v1';
+let fallbackToken: string | null = null;
+
+export function getSessionToken(): string {
   try {
-    let id = localStorage.getItem('project_user_id');
-    if (!id) {
-      id = uid('user');
-      localStorage.setItem('project_user_id', id);
-    }
-    return id;
-  } catch {
-    return uid('user');
+    const saved = localStorage.getItem(SESSION_KEY);
+    if (saved && /^[a-f0-9]{64}$/.test(saved)) return saved;
+  } catch { /* storage may be disabled */ }
+  if (!fallbackToken) {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    fallbackToken = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    try { localStorage.setItem(SESSION_KEY, fallbackToken); } catch { /* session expires on reload */ }
   }
+  return fallbackToken;
+}
+
+export async function getUserId(): Promise<string> {
+  const token = getSessionToken();
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  const hashed = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return 'user-' + hashed.slice(0, 32);
 }
 
 export function readStoredNumber(key: string, fallback: number) {
   try {
-    const value = Number(localStorage.getItem(key));
+    const raw = localStorage.getItem(key);
+    if (raw === null || raw.trim() === '') return fallback;
+    const value = Number(raw);
     return Number.isFinite(value) ? value : fallback;
   } catch {
     return fallback;
@@ -68,7 +80,7 @@ export function deriveJourneys(events: CalendarEvent[], homeLocation: string): J
     tripId: uid('trip'),
     origin: homeLocation,
     destination: sorted[0].location,
-    departureTime: minutesToTime(timeToMinutes(sorted[0].start) - 45),
+    departureTime: minutesToTime(Math.max(0, timeToMinutes(sorted[0].start) - 45)),
     arriveBy: sorted[0].start,
     mode: 'car',
   }];
