@@ -1,4 +1,7 @@
 import { strict as assert } from 'node:assert';
+import { createHash } from 'node:crypto';
+import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { matchesSession, sessionUserId } from '../auth';
 import { optimizeCandidateSets } from '../core/optimizer';
 import { snapshotFromTomorrowValues } from '../services/environment';
 import type { RouteCandidate, TripCandidateSet } from '../types';
@@ -97,4 +100,13 @@ assert.equal(tomorrow.windSpeed, 8.4);
 assert.equal(tomorrow.rainProbability, 35);
 assert(tomorrow.source.includes('Tomorrow.io realtime'));
 
-console.log('core optimizer and environmental mapping tests passed');
+const token = 'ab'.repeat(32);
+const userId = 'user-' + createHash('sha256').update(token).digest('hex').slice(0, 32);
+const request = { headers: { authorization: 'Bearer ' + token } } as Pick<APIGatewayProxyEvent, 'headers'>;
+assert.equal(sessionUserId(request), userId);
+assert(matchesSession(request, userId));
+assert(!matchesSession(request, 'user-' + '0'.repeat(32)));
+assert.equal(sessionUserId({ headers: { authorization: 'Bearer invalid' } }), null);
+assert.equal(sessionUserId({ headers: {} }), null);
+
+console.log('core optimizer, session verification and environmental mapping tests passed');

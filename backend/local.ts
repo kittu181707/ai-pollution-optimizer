@@ -10,6 +10,7 @@ import { handler as environmentCurrent } from "./src/handlers/environment-curren
 import { handler as runtimeConfig } from "./src/handlers/runtime-config";
 import { runDirectAnalysis } from "./src/services/analyze";
 import { handler as prepare } from "./src/handlers/prepare";
+import { matchesSession, sessionUserId } from "./src/auth";
 process.env.LOCAL_MODE = "true";
 process.env.DEMO_MODE = process.env.DEMO_MODE || "true";
 const app = express();
@@ -34,6 +35,8 @@ app.post("/api/ics/parse", async (req, res) =>
   send(res, await ics(event(req))),
 );
 app.post("/api/day/analyze", async (req, res) => {
+  if (!sessionUserId(event(req))) return res.status(401).json({ message: "Private session required" });
+  if (!matchesSession(event(req), req.body?.userId)) return res.status(403).json({ message: "Wrong private session" });
   try {
     const prepared = await prepare(req.body);
     const plan = await runDirectAnalysis(prepared);
@@ -46,29 +49,40 @@ app.post("/api/day/analyze", async (req, res) => {
   }
 });
 app.post("/api/plan/accept", (req, res) => {
+  if (!sessionUserId(event(req))) return res.status(401).json({ message: "Private session required" });
+  if (!matchesSession(event(req), req.body?.userId)) return res.status(403).json({ message: "Wrong private session" });
   const plan = mem.get(req.body.planId);
-  if (!plan) return res.status(404).json({ message: "Plan not found" });
-  const accepted = { ...plan, acceptedAt: new Date().toISOString() },
-    key = `history:${req.body.userId}`;
+  if (!plan || plan.userId !== req.body.userId) return res.status(404).json({ message: "Plan not found" });
+  const key = `history:${req.body.userId}`;
+  const existing = (mem.get(key) || []).find((item: any) => item.planId === plan.planId);
+  if (existing) return res.json(existing);
+  const accepted = { ...plan, acceptedAt: new Date().toISOString() };
   mem.set(key, [accepted, ...(mem.get(key) || [])]);
-  const g = mem.get("GLOBAL_IMPACT") || { totalPlans: 0, totalCo2eSaved: 0 };
-  g.totalPlans++;
-  const s = plan.metrics?.estimatedCo2eChangeKg
-    ? Math.max(0, -plan.metrics.estimatedCo2eChangeKg)
-    : 0;
-  if (s > 0) g.totalCo2eSaved += s;
-  mem.set("GLOBAL_IMPACT", g);
+  if (plan.workflow.dataMode !== 'demo') {
+    const g = mem.get("GLOBAL_IMPACT") || { totalPlans: 0, totalCo2eSaved: 0 };
+    g.totalPlans++;
+    g.totalCo2eSaved += Math.max(0, -Number(plan.metrics?.estimatedCo2eChangeKg || 0));
+    mem.set("GLOBAL_IMPACT", g);
+  }
   res.json(accepted);
 });
-app.get("/api/history", (req, res) =>
-  res.json({ plans: mem.get(`history:${req.query.userId}`) || [] }),
-);
+app.get("/api/history", (req, res) => {
+  if (!sessionUserId(event(req))) return res.status(401).json({ message: "Private session required" });
+  if (!matchesSession(event(req), String(req.query.userId || ''))) return res.status(403).json({ message: "Wrong private session" });
+  res.json({ plans: mem.get(`history:${req.query.userId}`) || [] });
+});
 app.get("/api/impact/community", (req, res) =>
   res.json(mem.get("GLOBAL_IMPACT") || { totalPlans: 0, totalCo2eSaved: 0 }),
 );
-app.post("/api/explain", async (req, res) =>
-  send(res, await explain(event(req))),
-);
+app.post("/api/explain", async (req, res) => {
+  const identity = sessionUserId(event(req));
+  if (!identity) return res.status(401).json({ message: "Private session required" });
+  const plan = mem.get(req.body?.planId);
+  if (!plan || plan.userId !== identity) return res.status(404).json({ message: "Plan not found" });
+  const change = plan.trips.find((trip: any) => trip.tripId === req.body?.tripId);
+  if (!change) return res.status(404).json({ message: "Trip not found" });
+  send(res, await explain(event({ ...req, body: { ...req.body, change } })));
+});
 app.get("/api/india", async (req, res) =>
   send(res, await india()),
 );

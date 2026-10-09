@@ -9,6 +9,12 @@ The browser only collects agenda/travel preferences and renders backend results.
 4. Persist stores the analyzed plan in DynamoDB.
 5. Bedrock is optional and only explains structured optimizer facts.
 
+## Data and guest-session boundaries
+
+Private API endpoints derive an anonymous guest user ID from a random 256-bit bearer secret. The client sends the credential in an authorization header; saved plans, history and explanation requests enforce the derived ID. Guest credentials are not verified user accounts and have no recovery mechanism.
+
+Accepted plans use deterministic DynamoDB sort keys and transactional writes so concurrent retries do not increment global impact more than once. Demo plans never add to production impact. Environmental exposure uses forecasts, time/route approximations, and route-mode factors, not measured individual dose.
+
 ## Hard constraints
 - Fixed event times do not move.
 - Candidates must arrive by the next fixed event.

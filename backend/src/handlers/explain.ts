@@ -3,22 +3,27 @@ import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-r
 import type { TripAnalysis } from '../types';
 import { body, json } from '../http';
 import { getPlan } from '../services/persistence';
+import { sessionUserId } from '../auth';
 
 const ID_RE = /^[a-zA-Z0-9_-]{2,160}$/;
 
 export const handler = async (event: APIGatewayProxyEvent) => {
+  const userId = sessionUserId(event);
+  if (!userId) return json(401, { message: 'Private session required' });
   try {
     const input = body<{ planId?: string; tripId?: string; change?: TripAnalysis }>(event.body);
     let change: TripAnalysis | undefined;
 
     if (process.env.LOCAL_MODE === 'true' && input.change) {
+      if (input.change.tripId !== input.tripId) return json(400, { message: 'Mismatched trip' });
       change = input.change;
     } else {
       if (!ID_RE.test(input.planId || '') || !ID_RE.test(input.tripId || '')) {
         return json(400, { message: 'Invalid planId or tripId' });
       }
       const draft = await getPlan(input.planId!);
-      change = draft?.plan?.trips.find((trip) => trip.tripId === input.tripId);
+      if (!draft?.plan || draft.userId !== userId || draft.plan.userId !== userId) return json(404, { message: 'Plan not found' });
+      change = draft.plan.trips.find((trip) => trip.tripId === input.tripId);
       if (!change) return json(404, { message: 'Trip not found in analyzed plan' });
     }
 

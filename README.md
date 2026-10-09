@@ -81,6 +81,14 @@ VITE_API_BASE_URL=<ApiEndpoint output from the SAM stack>
 
 That is the only required frontend deployment variable. `VITE_AMAZON_LOCATION_API_KEY` is an optional local/debug override; production discovers the SAM-created key automatically.
 
+## Privacy, provenance, and limits
+
+- Anonymous sessions use a random 256-bit browser bearer credential. Server-side endpoints derive the user ID using SHA-256, verify plan ownership, and reject access by another guest identity. This is **not verified account authentication**. Removing local browser storage loses access to anonymous history. Pre-hardening browser IDs are not automatically migrated.
+- The demo remains intentionally available. Each controlled demonstration analysis is clearly identified as `demo` and is **excluded from community impact counts**, even when saved. Repeated acceptance is idempotent, including concurrent production requests.
+- Pollution and exposure results are modeled estimates, **not personal measured dosage**, block-by-block sensor readings, or health guarantees. The Open-Meteo fallback reports US AQI, not India's CPCB AQI scale. Three route samples do not imply three independent neighborhood measurements.
+- Air-quality and weather attribution: [Open-Meteo](https://open-meteo.com/) and the [Copernicus Atmosphere Monitoring Service (CAMS)](https://atmosphere.copernicus.eu/). Third-party forecasts have spatial and temporal limitations; travel-mode factors are approximations rather than calibrated personal inhalation measurements.
+- The planner is limited to one calendar day and does not support departures crossing midnight. CI checks local/demo behavior; a full production journey must be verified separately with AWS and live providers.
+
 ## Validation
 
 The CI pipeline blocks merges unless all of these pass:

@@ -16,6 +16,8 @@ const accepted = read('src/screens/AcceptedScreen.tsx');
 const india = read('src/screens/IndiaScreen.tsx');
 const api = read('src/api.ts');
 const pkg = read('package.json');
+const utils = read('src/utils.ts');
+const backendAuth = read('../backend/src/auth.ts');
 
 assert(map.includes('maps.geo.') && map.includes('/v2/styles/'), 'primary map must use Amazon Location Maps V2');
 assert(map.includes("traffic: 'All'"), 'Amazon map must render live traffic');
@@ -39,4 +41,9 @@ assert(app.includes('isDemo={isDemo}'), 'demo/live provenance must flow into scr
 assert(travel.includes("mode.value === 'bike' && !isDemo"), 'unverified bicycle routing must stay disabled in live mode');
 assert(!accepted.includes('google.com/maps'), 'accepted plan must not substitute an unanalyzed Google route');
 
-console.log('live AWS product contract passed');
+assert(utils.includes("raw === null"), 'missing extra-travel preference must use default');
+assert(utils.includes("crypto.subtle.digest"), 'private user ID must derive from bearer secret');
+assert(api.includes("Authorization:"), 'private API requests must include bearer secret');
+assert(backendAuth.includes("timingSafeEqual"), 'server must compare user identity safely');
+assert(liveSnapshot.includes("setEnvironment(null)"), 'stale live conditions must be discarded');
+console.log('live AWS product and private-session contract passed');

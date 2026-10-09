@@ -12,7 +12,7 @@ export function ImpactScreen() {
   useEffect(() => {
     async function load() {
       try {
-        const userId = getUserId();
+        const userId = await getUserId();
         const [histRes, commRes] = await Promise.all([
           api.history(userId),
           api.communityImpact(),
@@ -28,11 +28,12 @@ export function ImpactScreen() {
     load();
   }, []);
 
-  const myCo2e = personalPlans.reduce((sum, p) => {
+  const verifiedPlans = personalPlans.filter((plan) => plan.workflow.dataMode !== 'demo');
+  const myCo2e = verifiedPlans.reduce((sum, p) => {
     return sum + (p.metrics?.estimatedCo2eChangeKg ? Math.max(0, -p.metrics.estimatedCo2eChangeKg) : 0);
   }, 0);
 
-  const myExposure = personalPlans.reduce((sum, p) => {
+  const myExposure = verifiedPlans.reduce((sum, p) => {
     const orig = p.metrics?.originalExposureIndex || 0;
     const opt = p.metrics?.optimizedExposureIndex || 0;
     return sum + Math.max(0, orig - opt);
@@ -45,7 +46,7 @@ export function ImpactScreen() {
       <div className="screen-title">
         <p className="eyebrow">YOUR IMPACT</p>
         <h1>Making a difference</h1>
-        <p>Your small changes add up to real environmental impact.</p>
+        <p>Estimated changes in modeled exposure and CO₂e; demonstration plans are excluded from impact.</p>
       </div>
 
       <section className="impact-section">

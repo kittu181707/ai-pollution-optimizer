@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './config';
+import { getSessionToken } from './utils';
 import type { AcceptedPlan, AgendaPayload, AnalyzeDayRequest, Coordinates, DayAnalysis, EnvironmentSnapshot, RuntimeConfig, TripAnalysis } from './types';
 
 async function request<T>(path: string, init?: RequestInit, timeoutMs = 15_000): Promise<T> {
@@ -8,7 +9,7 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = 15_000):
     const response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getSessionToken()}`, ...(init?.headers || {}) },
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.message || `Request failed (${response.status})`);
