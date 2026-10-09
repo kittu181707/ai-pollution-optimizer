@@ -163,7 +163,7 @@ export function IndiaScreen() {
       <div className="screen-title">
         <p className="eyebrow">NATIONAL OVERVIEW</p>
         <h1>India Environmental Intelligence</h1>
-        <p>Live environmental signals across major Indian cities.</p>
+        <p>Modeled US AQI and particulate forecasts across selected Indian cities; not street-level monitors.</p>
       </div>
 
       <div className="india-live-map">
