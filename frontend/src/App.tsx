@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from './api';
 import { Sidebar, type NavTab } from './components/Sidebar';
 import { Drawer } from './components/Drawer';
@@ -43,7 +43,14 @@ export default function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
 
-  const userId = useMemo(() => getUserId(), []);
+  const [userId, setUserId] = useState('');
+  useEffect(() => {
+    let active = true;
+    void getUserId().then((value) => { if (active) setUserId(value); }).catch(() => {
+      if (active) setError('Private session could not initialize. A secure browser connection is required.');
+    });
+    return () => { active = false; };
+  }, []);
   const setMaxExtra = (value: number) => { setMaxExtraState(value); storeNumber('max_extra_minutes', value); };
 
   const startAgenda = (mode: AgendaMode) => {
@@ -100,6 +107,7 @@ export default function App() {
 
   const runAnalysis = async () => {
     if (busy) return;
+    if (!userId) { setError('Private session is initializing. Please retry.'); return; }
     setStep('analysis'); setError(undefined); setBusy(true);
     try {
       const result = await api.analyzeDay({ ...agenda, userId, journeys, maxExtraMinutes: maxExtra, demoMode: isDemo });
@@ -113,6 +121,7 @@ export default function App() {
 
   const acceptPlan = async () => {
     if (!analysis || busy) return;
+    if (!userId) { setError('Private session unavailable.'); return; }
     setBusy(true); setError(undefined);
     try {
       const saved = await api.acceptPlan(userId, analysis.planId);
@@ -134,16 +143,20 @@ export default function App() {
   };
 
   const refreshHistory = async () => {
+    if (!userId) return;
     setHistoryLoading(true);
     try {
       const result = await api.history(userId);
       setHistory(result.plans);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'History unavailable');
+      setHistory([]);
     } finally {
       setHistoryLoading(false);
     }
   };
 
-  useEffect(() => { if (tab === 'history') void refreshHistory(); }, [tab]);
+  useEffect(() => { if (tab === 'history' && userId) void refreshHistory(); }, [tab, userId]);
 
   const onNav = (next: NavTab) => {
     setTab(next);
