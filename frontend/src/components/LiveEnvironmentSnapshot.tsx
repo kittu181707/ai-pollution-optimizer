@@ -46,7 +46,7 @@ function browserPosition(): Promise<Coordinates> {
 }
 
 function ageLabel(updatedAt?: string) {
-  if (!updatedAt) return 'fresh feed';
+  if (!updatedAt) return 'time unavailable';
   const age = Date.now() - Date.parse(updatedAt);
   if (!Number.isFinite(age) || age < 60_000) return 'updated now';
   return `updated ${Math.max(1, Math.round(age / 60_000))} min ago`;
@@ -80,6 +80,8 @@ export function LiveEnvironmentSnapshot({ homeLocation, isDemo }: { homeLocation
     };
 
     setBusy(true);
+    setEnvironment(null);
+    setQuery(null);
     setError(undefined);
     void resolveQuery().then((next) => {
       if (active) setQuery(next);
@@ -105,7 +107,8 @@ export function LiveEnvironmentSnapshot({ homeLocation, isDemo }: { homeLocation
           setError(undefined);
         }
       } catch (cause) {
-        if (active && !environment) {
+        if (active) {
+          setEnvironment(null); // Never show previous location/failed feed as live data.
           setError(cause instanceof Error ? cause.message : 'Live conditions unavailable');
         }
       } finally {
@@ -151,7 +154,7 @@ export function LiveEnvironmentSnapshot({ homeLocation, isDemo }: { homeLocation
       <span className={`live-source-badge ${isDemo ? 'demo' : ''}`}>{sourceLabel}</span>
     </div>
     <div className="snapshot-grid">
-      <div className="snapshot-metric"><Gauge size={15}/><span className="label">AQI</span><strong>{Math.round(environment.aqi)}</strong><span className="status moderate">{aqiLabel(environment.aqi)}</span></div>
+      <div className="snapshot-metric"><Gauge size={15}/><span className="label">US AQI</span><strong>{Math.round(environment.aqi)}</strong><span className="status moderate">{aqiLabel(environment.aqi)}</span></div>
       <div className="snapshot-metric"><Wind size={15}/><span className="label">PM2.5</span><strong>{environment.pm25.toFixed(0)}</strong><small>µg/m³</small></div>
       <div className="snapshot-metric"><Wind size={15}/><span className="label">PM10</span><strong>{environment.pm10.toFixed(0)}</strong><small>µg/m³</small></div>
       <div className="snapshot-metric"><ThermometerSun size={15}/><span className="label">Temperature</span><strong>{environment.temperature.toFixed(0)}°C</strong><small>{environment.humidity.toFixed(0)}% humidity</small></div>
