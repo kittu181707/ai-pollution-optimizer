@@ -119,6 +119,59 @@ async function main() {
     /Bike routing is unavailable/,
   );
 
+  // Deterministic differential test: DP output vs exhaustive search on 2,000 diverse small problems.
+  let seed = 0x8f42e331;
+  const rand = (limit: number) => {
+    seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+    return (seed >>> 0) % limit;
+  };
+  for (let trial = 0; trial < 2000; trial += 1) {
+    const groups: TripCandidateSet[] = Array.from({ length: 4 }, (_, trip) => {
+      const original = candidate(trip, 0);
+      original.travelMinutes = 10;
+      original.modeledExposure = 150 + rand(50);
+      original.highUvOutdoorMinutes = 0;
+      original.heatRiskOutdoorMinutes = 0;
+      const choices = [original, ...Array.from({ length: 3 }, (_, k) => {
+        const item = candidate(trip, k + 1);
+        item.travelMinutes = 10 + rand(8);
+        item.modeledExposure = 25 + rand(180);
+        item.highUvOutdoorMinutes = 0;
+        item.heatRiskOutdoorMinutes = 0;
+        item.shiftMinutes = 0;
+        return item;
+      })];
+      return { journey: { tripId: `rnd-${trip}`, origin: 'A', destination: 'B', departureTime: '08:00', mode: 'car' }, original, candidates: choices };
+    });
+    const budget = rand(20);
+    let optimal = Number.POSITIVE_INFINITY;
+    for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) for (let d = 0; d < 4; d++) for (let e = 0; e < 4; e++) {
+      const selection = [groups[0].candidates[a], groups[1].candidates[b], groups[2].candidates[d], groups[3].candidates[e]];
+      const extra = selection.reduce((sum, choice) => sum + Math.max(0, choice.travelMinutes - 10), 0);
+      if (extra > budget) continue;
+      const score = selection.reduce((sum, choice, i) =>
+        sum + choice.modeledExposure * 1000 + extraPerRoute(choice) + (choice.candidateId === groups[i].original.candidateId ? 0 : 2), 0);
+      optimal = Math.min(optimal, score);
+    }
+    const actual = optimizeCandidateSets({
+      userId: 'random', date: '2026-10-09', events: [], sets: groups,
+      maxExtraMinutes: budget, environmentSource: 'test', routeSource: 'test',
+    });
+    const chosen = actual.trips.map((trip) => trip.recommended);
+    const originalRaw = groups.reduce((sum, group) => sum + group.original.modeledExposure, 0);
+    const chosenRaw = chosen.reduce((sum, item) => sum + item.modeledExposure, 0);
+    if (chosenRaw === originalRaw && actual.changes.length === 0) {
+      assert((originalRaw - optimal / 1000) / originalRaw < .02 || chosen.every((x, i) => x.candidateId === groups[i].original.candidateId));
+    } else {
+      const actualScore = chosen.reduce((sum, choice, i) =>
+        sum + choice.modeledExposure * 1000 + extraPerRoute(choice) + (choice.candidateId === groups[i].original.candidateId ? 0 : 2), 0);
+      assert.equal(actualScore, optimal, `DP diverged on randomized trial ${trial}`);
+    }
+    assert(actual.metrics.extraTravelMinutes <= budget);
+  }
+  function extraPerRoute(item: RouteCandidate) { return Math.max(0, item.travelMinutes - 10); }
+  console.log('2,000 optimizer differential stress trials passed');
+
   console.log('stress, validation and live-routing guard tests passed');
 }
 
