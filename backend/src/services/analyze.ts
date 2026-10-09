@@ -73,6 +73,8 @@ async function buildCandidateSet(
   const jobs: RouteJob[] = [];
 
   for (const shift of TIME_SHIFT_OPTIONS) {
+    const shiftedMinutes = timeToMinutes(journey.departureTime) + shift;
+    if (shiftedMinutes < 0 || shiftedMinutes >= 1440) continue; // Single-day model.
     const departureTime = shiftTime(journey.departureTime, shift);
     if (earliestDeparture && timeToMinutes(departureTime) < timeToMinutes(earliestDeparture)) continue;
     if (availableMinutes(departureTime, journey.arriveBy) <= 0) continue;
@@ -172,8 +174,8 @@ async function buildCandidateSet(
 }
 
 function isUsefulAlternative(candidate: RouteCandidate, original: RouteCandidate) {
-  if (original.pollutionExposure <= 0) return false;
-  const gain = (original.pollutionExposure - candidate.pollutionExposure) / original.pollutionExposure;
+  if (original.modeledExposure <= 0) return false;
+  const gain = (original.modeledExposure - candidate.modeledExposure) / original.modeledExposure;
   if (gain <= 0) return false;
   const noExtraTravel = candidate.travelMinutes <= original.travelMinutes;
   const smallShift = Math.abs(candidate.shiftMinutes) <= 5;
@@ -234,7 +236,11 @@ function earliestDepartureForJourney(
   destination: string,
   arriveBy?: string,
 ) {
-  if (!arriveBy) return undefined;
+  if (!arriveBy) {
+    // Last trip home still must start after the last appointment at its origin.
+    const previous = [...events].filter((event) => samePlace(event.location, origin)).sort((a, b) => a.end.localeCompare(b.end)).at(-1);
+    return previous?.end;
+  }
   const sorted = [...events].sort((a, b) => a.start.localeCompare(b.start));
   const index = sorted.findIndex((event) => event.start === arriveBy && samePlace(event.location, destination));
   if (index <= 0) return undefined;
