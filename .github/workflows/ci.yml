@@ -60,6 +60,35 @@ jobs:
           });
           if (invalidEnvironment.status !== 400) throw new Error('invalid environment coordinates were not rejected');
 
+          const crypto = await import('node:crypto');
+          const token = 'cd'.repeat(32);
+          const userId = 'user-' + crypto.createHash('sha256').update(token).digest('hex').slice(0,32);
+          const headers = {'content-type':'application/json',authorization:'Bearer '+token};
+          const payload = {
+            userId, date:demo.date, homeLocation:demo.homeLocation,
+            events:[demo.events[0]], maxExtraMinutes:10, demoMode:true,
+            journeys:[{tripId:'first-trip',origin:demo.homeLocation,destination:demo.events[0].location,departureTime:'07:45',arriveBy:demo.events[0].start,mode:'car'}]
+          };
+          const unauthorized = await fetch('http://127.0.0.1:3001/api/day/analyze',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
+          if(unauthorized.status!==401)throw new Error('analysis accepted missing private session');
+          const analysisResponse = await fetch('http://127.0.0.1:3001/api/day/analyze',{method:'POST',headers,body:JSON.stringify(payload)});
+          if(!analysisResponse.ok)throw new Error('local analysis failed: '+await analysisResponse.text());
+          const analysis = await analysisResponse.json();
+          if(analysis.workflow.dataMode!=='demo')throw new Error('controlled demo was misclassified');
+          const savedBody = JSON.stringify({userId,planId:analysis.planId});
+          const accepted = await fetch('http://127.0.0.1:3001/api/plan/accept',{method:'POST',headers,body:savedBody});
+          if(!accepted.ok)throw new Error('plan accept failed: '+await accepted.text());
+          const second = await fetch('http://127.0.0.1:3001/api/plan/accept',{method:'POST',headers,body:savedBody});
+          if(!second.ok)throw new Error('repeat acceptance failed');
+          const wrong = await fetch('http://127.0.0.1:3001/api/history?userId=someone-else',{headers});
+          if(wrong.status!==403)throw new Error('session could view another user history');
+          const historyResponse = await fetch('http://127.0.0.1:3001/api/history?userId='+userId,{headers});
+          if(!historyResponse.ok)throw new Error('session history failed');
+          const history = await historyResponse.json();
+          if(history.plans.length!==1)throw new Error('repeat acceptance duplicated history');
+          const impact = await (await fetch('http://127.0.0.1:3001/api/impact/community')).json();
+          if(impact.totalPlans!==0)throw new Error('demo inflated real impact');
+          console.log('session isolation, demo classification and idempotent plan smoke passed');
           console.log('local API demo + runtime-config + live-environment guard smoke passed');
           NODE
 
