@@ -1,5 +1,5 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import type { DayAnalysis } from '../types';
 
 const table = () => process.env.TABLE_NAME || 'ai-pollution-optimizer-plans';
@@ -42,39 +42,40 @@ export async function acceptPlan(userId: string, planId: string) {
   if (!draft?.plan) throw new Error('Plan not found');
   if (draft.userId !== userId || draft.plan.userId !== userId) throw new Error('Plan does not belong to this user');
 
+  // Deterministic sort key makes concurrent and repeated accepts idempotent.
+  const key = { pk: `USER#${userId}`, sk: `PLAN#${draft.plan.createdAt}#${planId}` };
+  const existing = await doc().send(new GetCommand({ TableName: table(), Key: key }));
+  if (existing.Item?.plan) return existing.Item.plan as DayAnalysis & { acceptedAt: string };
+
   const acceptedAt = new Date().toISOString();
   const plan = { ...draft.plan, acceptedAt };
-  
-  await doc().send(new PutCommand({
-    TableName: table(),
-    Item: {
-      pk: `USER#${userId}`,
-      sk: `PLAN#${acceptedAt}#${planId}`,
-      planId,
-      acceptedAt,
-      plan,
-    },
-  }));
-
-  // Update global impact stats
-  const co2eSaved = plan.metrics?.estimatedCo2eChangeKg
-    ? Math.max(0, -plan.metrics.estimatedCo2eChangeKg) // Negative change is savings
-    : 0;
-
-  try {
-    await doc().send(new UpdateCommand({
+  const co2eSaved = Math.max(0, -Number(plan.metrics?.estimatedCo2eChangeKg || 0));
+  const actions: any[] = [{
+    Put: {
       TableName: table(),
-      Key: { pk: 'GLOBAL', sk: 'IMPACT' },
-      UpdateExpression: 'ADD totalPlans :one, totalCo2eSaved :co2e',
-      ExpressionAttributeValues: {
-        ':one': 1,
-        ':co2e': co2eSaved
-      }
-    }));
-  } catch (err) {
-    console.error('Failed to update global impact', err);
+      Item: { ...key, planId, acceptedAt, plan },
+      ConditionExpression: 'attribute_not_exists(pk)',
+    },
+  }];
+  // Demo plans may be saved, but never contribute to real impact statistics.
+  if (plan.workflow.dataMode !== 'demo') {
+    actions.push({
+      Update: {
+        TableName: table(),
+        Key: { pk: 'GLOBAL', sk: 'IMPACT' },
+        UpdateExpression: 'ADD totalPlans :one, totalCo2eSaved :co2e',
+        ExpressionAttributeValues: { ':one': 1, ':co2e': co2eSaved },
+      },
+    });
   }
-
+  try {
+    await doc().send(new TransactWriteCommand({ TransactItems: actions }));
+  } catch (error) {
+    // A concurrent winner already accepted this plan; return that saved copy.
+    const previous = await doc().send(new GetCommand({ TableName: table(), Key: key, ConsistentRead: true }));
+    if (previous.Item?.plan) return previous.Item.plan as DayAnalysis & { acceptedAt: string };
+    throw error;
+  }
   return plan;
 }
 
